@@ -5,7 +5,7 @@ library(EMMREML)
 library(cobs)
 library(cowplot)
 
-## read in data frames with DM, mean, and variance for each gene ## 
+## read in data frames with DM, mean, and variance for each gene ; these files are in SGE_DM/dataFiles ## 
 sge_LPS_DM_matrix <- read.table('~/Desktop/SGE_DM/sge_LPS_DM_matrix')
 sge_LPS_mean_matrix <- read.table('~/Desktop/SGE_DM/sge_LPS_mean_matrix')
 sge_LPS_var_matrix <- read.table('~/Desktop/SGE_DM/sge_LPS_var_matrix')
@@ -101,7 +101,7 @@ ggplot() +
 
 ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
 ## get some metadata ##
-metadata <- read.table('~/Desktop/SGE_DM/sge_metadata_matrix', header = T)
+metadata <- read.table('~/Desktop/SGE_DM/sge_metadata_matrix', header = T) # this files is also in SGE_DM/dataFiles
 metadata[1,1] <- 'Mo'
 metadata <- metadata[order(metadata$ID),]
 
@@ -142,6 +142,7 @@ colnames(random_effects)=metadata[1:45,'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Downloads/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
 rownames(K)[34] <- 'JE11'
 colnames(K)[34] <- 'JE11'
 K=K[unique(metadata$ID),unique(metadata$ID)]
@@ -320,7 +321,8 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   return(fdrs_df)
 }
 
+### Ryan, this is the part that is breaking, let me know if it works for you ###
+
 res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_NC,'p_value_trtNC:elo_centered',"eloNC")
 res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS,"p_value_trtLPS:elo_centered","eloLPS")
-
 res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")
