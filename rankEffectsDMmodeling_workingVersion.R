@@ -74,7 +74,7 @@ p3 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,3],sge_NC_DM_matrix[,3]
 
 plot_grid(p1,p2,p3, ncol = 3)
 
-## 
+## just take a quick look at some stuff ##
 meanVarRs <- vector()
 for (i in 1:45){
   meanVarRs[[i]] <- cor.test(sge_NC_mean_matrix[,i],sge_NC_var_matrix[,i])$estimate 
