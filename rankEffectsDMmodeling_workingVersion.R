@@ -333,9 +333,10 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
 
 ### Ryan, this is the part that is breaking, let me know if it works for you ###
 ### fixed!!!                                                   ###
+### Nice ###
 
 res_fullDF <- data.frame(res_full)
 
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_NC,'p_value_trtNC.elo_centered',"eloNC")
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
-res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")
+res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS_effect,"p_value_trtNC","LPSeffect")
