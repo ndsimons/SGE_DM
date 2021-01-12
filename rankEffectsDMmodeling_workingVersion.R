@@ -134,7 +134,9 @@ resid_DM=apply(residuals.MArrayLM(object=fit, sge_DM_matrix_nested),2,function(x
 ## run a nested model with trt, and age and elo nested within trt ##
 ## elo and age have to be mean centered for nested model ##
 metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
+#metadata$elo_centered <- metadata$elo - mean(metadata$elo)
 metadata$age_centered <- scale(metadata$age, center = T, scale = F)
+#metadata$age_centered <- metadata$age - mean(metadata$age)
 
 design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
 
@@ -330,7 +332,7 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
 }
 
 ### Ryan, this is the part that is breaking, let me know if it works for you ###
-### fixed <fingers crossed>                                                  ###
+### fixed!!!                                                   ###
 
 res_fullDF <- data.frame(res_full)
 
