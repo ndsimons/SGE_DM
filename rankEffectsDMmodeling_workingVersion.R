@@ -13,6 +13,14 @@ sge_NC_DM_matrix <- read.table('~/Desktop/SGE_DM/sge_NC_DM_matrix')
 sge_NC_mean_matrix <- read.table('~/Desktop/SGE_DM/sge_NC_mean_matrix')
 sge_NC_var_matrix <- read.table('~/Desktop/SGE_DM/sge_NC_var_matrix')
 
+## remove genes w/0 as DM values for every individual
+## don't have to remove them from 
+sge_LPS_DM_matrix <- sge_LPS_DM_matrix[rowSums(sge_LPS_DM_matrix) != 0,]
+sge_NC_DM_matrix <- sge_NC_DM_matrix[rowSums(sge_NC_DM_matrix) != 0,]
+
+## only use common set of genes
+
+
 ## subset mean and variance data frames to include only the genes present in the DM data frame ##
 sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% rownames(sge_NC_DM_matrix))
 sge_NC_var_matrix <- subset(sge_NC_var_matrix, rownames(sge_NC_var_matrix) %in% rownames(sge_NC_DM_matrix))
@@ -322,7 +330,10 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
 }
 
 ### Ryan, this is the part that is breaking, let me know if it works for you ###
+### fixed <fingers crossed>                                                  ###
 
-res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_NC,'p_value_trtNC:elo_centered',"eloNC")
-res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS,"p_value_trtLPS:elo_centered","eloLPS")
-res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")
+res_fullDF <- data.frame(res_full)
+
+res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_NC,'p_value_trtNC.elo_centered',"eloNC")
+res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
+res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")

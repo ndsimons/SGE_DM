@@ -28,9 +28,10 @@ sge_LPS_mean_matrix <- subset(sge_LPS_mean_matrix, rownames(sge_LPS_mean_matrix)
 sge_LPS_var_matrix <- subset(sge_LPS_var_matrix, rownames(sge_LPS_var_matrix) %in% rownames(sge_LPS_DM_matrix))
 ```
 
+
+Does the DM metric adequately remove the mean/variance relationship?
+Plot mean vs variance for a few individuals to observe initial pattern
 ```{r}
-## Does the DM metric adequately remove the mean/variance relationship? ##
-## Plot mean vs variance for a few individuals to observe initial pattern ##
 p1 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,1],sge_NC_var_matrix[,1])) +
   geom_point(alpha=0.5) +
   ylim(0,1000) +
@@ -57,8 +58,10 @@ p3 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,3],sge_NC_var_matrix[,3
   theme_minimal()
 
 plot_grid(p1,p2,p3, ncol = 3)
+```
 
-## You can pretty clearly see the mean variance relationship, now plot mean vs DM for same individuals ##
+You can pretty clearly see the mean variance relationship, now plot mean vs DM for same individuals
+```{r}
 p1 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,1],sge_NC_DM_matrix[,1])) +
   geom_point(alpha=0.5) +
   xlim(0,50) +
@@ -82,7 +85,10 @@ p3 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,3],sge_NC_DM_matrix[,3]
   theme_minimal()
 
 plot_grid(p1,p2,p3, ncol = 3)
+```
 
+
+```{r}
 ## just take a quick look at some stuff ##
 meanVarRs <- vector()
 for (i in 1:45){
@@ -106,12 +112,13 @@ ggplot() +
   geom_density(aes(abs(sge_NC_DM_matrix[,1]), fill='NC'), alpha=0.5) +
   geom_density(aes(abs(sge_LPS_DM_matrix[,1]), fill='LPS'), alpha=0.5) +
   xlim(0,0.4)
+```
 
+Here I'm doing some modeling to ask what are the effects of treatment and rank on DM & get some metadata
 
-## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
-## get some metadata ##
+```{r}
 metadata <- read.table('~/Desktop/SGE_DM/sge_metadata_matrix', header = T) # this files is also in SGE_DM/dataFiles
-metadata[1,1] <- 'Mo'
+metadata[1,1] <- 'mo'
 metadata <- metadata[order(metadata$ID),]
 
 ## make sure metadata order matches data frames ##
@@ -125,7 +132,10 @@ metadata$trt <- rep(c('NC','LPS'), times=c(45,45))
 sge_DM_matrix_nested <- merge(sge_NC_DM_matrix,sge_LPS_DM_matrix, by=0)
 rownames(sge_DM_matrix_nested) <- sge_DM_matrix_nested$Row.names
 sge_DM_matrix_nested$Row.names <- NULL
+```
 
+
+```{r}
 ## regress out group effects from DM ##
 design <- model.matrix(~metadata$group)
 fit <-lmFit(sge_DM_matrix_nested,design)
@@ -150,10 +160,16 @@ random_effects=resid_DM[,1:45]
 colnames(random_effects)=metadata[1:45,'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
-K <- read.table('~/Downloads/SGE2kinshipmatrix.txt')
+K <- read.table('~/Desktop/SGE_DM/SGE2kinshipmatrix.txt')
 # correcting capitalization so it matches
 rownames(K)[34] <- 'JE11'
 colnames(K)[34] <- 'JE11'
+
+#fixing Mo -> mo
+rownames(K)[31] <- 'mo'
+colnames(K)[31] <- 'mo'
+
+
 K=K[unique(metadata$ID),unique(metadata$ID)]
 
 Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
@@ -163,8 +179,11 @@ for(i in 1:ncol(Z)){
   set=which(metadata$ID == colnames(Z)[i])
   Z[set,i]=1
 }
+```
 
-#Fit a model for each gene using emmreml
+
+Fit a model for each gene using emmreml
+```{r}
 for(i in 1:nrow(resid_DM))
 {
   emma=emmreml(y=resid_DM[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
@@ -173,7 +192,7 @@ for(i in 1:nrow(resid_DM))
 }
 
 
-## Permutations for emprirical null ##
+## Permutations for empirical null ##
 ################################################################################################################################
 ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
 ################################################################################################################################
@@ -267,8 +286,11 @@ for(iter in 1:iters)
     shuffled_elos_pvals_LPS_effect <- cbind(shuffled_elos_pvals_LPS_effect,x=res_null[,"p_value_trtNC"])
   }
 }
+```
 
 
+load perm.fdr function
+```{r}
 perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
   pvals_index=which(colnames(input_df)==Pvals_col_name)
@@ -329,11 +351,88 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
   return(fdrs_df)
 }
+```
 
+
+```{r}
 ### Ryan, this is the part that is breaking, let me know if it works for you ###
 
-res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_NC,'p_value_trtNC:elo_centered',"eloNC")
-res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS,"p_value_trtLPS:elo_centered","eloLPS")
+res_fullDF <- data.frame(res_full)
+
+res_fullDF <- na.omit(res_fullDF)
+shuffled_elos_pvals_NC_noNAN <- na.omit(shuffled_elos_pvals_NC)
+
+res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_NC_noNAN,"p_value_trtNC.elo_centered","eloNC")
+
+res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
+
 res_full=perm.fdr(data.frame(res_full),shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")
+```
+
+
+```{r troubleshoot perm fdr}
+
+input_df <- res_fullDF
+perm_df <- shuffled_elos_pvals_NC
+Pvals_col_name <- "p_value_trtNC.elo_centered"
+name <- "eloNC"
+
+pvals_index=which(colnames(input_df)==Pvals_col_name)
+ro<-input_df[order(input_df[,pvals_index]),]
+p_obs <- data.frame(pvalue=ro[,pvals_index])
+p_vector<-matrix(as.matrix(perm_df),ncol=1)
+p_vector=data.frame(p_vector[order(p_vector)])
+
+F<-p_obs[,1]
+F_o<-p_obs[,1]
+pi_hat<-p_obs[,1]
+
+j=1
+observed<-length(p_obs[,1])
+randoms<-length(p_vector[,1])
+
+for(i in 1:observed)
+{
+  repeat
+  {
+    if((p_vector[j,1]<p_obs[i,1])&j<randoms){j<-j+1}else{break}
+  }
+  F[i]=i/observed
+  F_o[i]=(j-1)/randoms
+  if(F_o[i]<1){pi_hat[i]=(1-F[i])/(1-F_o[i])}else{pi_hat[i]=1}
+}
+tabla <-data.frame(pi_hat,pval=p_obs[,1])
+
+tabla[1,]=c(1,0)
+last_percentile_average=mean(tabla$pi_hat[as.integer(min((length(tabla[,1])*0.99),(nrow(tabla)-1)):length(tabla[,1]))])
+tabla[nrow(tabla),]=c(last_percentile_average,1)
+constraint_matrix=as.matrix(data.frame(c(0,2),c(0,1),c(1,0)))
+f_hat<-suppressWarnings(cobs(tabla$pval,tabla$pi_hat,constraint="convex",pointwise=constraint_matrix,maxiter=1000,print.warn=FALSE,print.mesg=FALSE))
+
+f_hat_serie=f_hat$fitted
+pi_o=f_hat_serie[length(f_hat_serie)]
+pi_o=min(pi_o,1)
+pi_o=max(pi_o,0)
+
+Fdr_ST_perm=pi_o*F_o/F
+
+for(i in 1:length(p_obs[,1]))
+{
+  Fdr_ST_perm[i]=pi_o*F_o[i]/F[i]
+  if(i>1)
+  {
+    for(j in 1:(i-1))
+    {
+      if(Fdr_ST_perm[i-j]>Fdr_ST_perm[i]){Fdr_ST_perm[i-j]=Fdr_ST_perm[i]}else{break}
+    }
+  }
+  if(Fdr_ST_perm[i]>1)  Fdr_ST_perm[i]=1
+}
+
+fdrs_df <-data.frame(ro,q_ST_perm=Fdr_ST_perm)
+rownames(fdrs_df)=rownames(ro)
+colnames(fdrs_df)[ncol(fdrs_df)]=paste0("fdr_",name)
+
+return(fdrs_df)
 ```
 
