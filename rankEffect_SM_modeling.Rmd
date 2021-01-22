@@ -460,12 +460,23 @@ res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_NC,"p_value_trtNC.elo_cent
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
 
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")
+
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$p_value_trtNC), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtNC.elo_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.elo_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtNC.age_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.age_centered`), bins = 100)
 ```
 
 
 what if we use variance but control for mean?
 ```{r}
-## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
+## Here I'm doing some modeling to ask what are the effects of treatment and rank on variance ##
 ## get some metadata ##
 metadata <- read.table('~/Desktop/SGE_DM/sge_metadata_matrix', header = T) # this files is also in SGE_DM/dataFiles
 metadata[1,1] <- 'Mo'
@@ -483,11 +494,18 @@ sge_var_matrix_nested <- merge(sge_NC_var_matrix,sge_LPS_var_matrix, by=0)
 rownames(sge_var_matrix_nested) <- sge_var_matrix_nested$Row.names
 sge_var_matrix_nested$Row.names <- NULL
 
-##### NEED TO COMBINE MEANS, THEN GET A MEAN FOR EACH ANIMAL, AND ADD THAT TO METADATA
-##### THEN I CAN CONTROL FOR THE MEAN WITH THE VARIANCES AS THE FOCAL VARIABLE IN PLACE OF DM
+##### NEED TO COMBINE MEANS, THEN GET A MEAN FOR EACH ANIMAL, 
 
+sge_mean_matrix_nested <- merge(sge_NC_mean_matrix,sge_LPS_mean_matrix, by=0)
+rownames(sge_mean_matrix_nested) <- sge_mean_matrix_nested$Row.names
+sge_mean_matrix_nested$Row.names <- NULL
+
+##### AND ADD THAT TO METADATA
+metadata$means <- colMeans(sge_mean_matrix_nested)
+
+##### THEN I CAN CONTROL FOR THE MEAN WITH THE VARIANCES AS THE FOCAL VARIABLE IN PLACE OF DM
 ## regress out group effects from DM ##
-design <- model.matrix(~metadata$group)
+design <- model.matrix(~metadata$means)
 fit <-lmFit(sge_var_matrix_nested,design)
 intercepts=data.frame(eBayes(fit))[,1]
 resid_var=apply(residuals.MArrayLM(object=fit, sge_var_matrix_nested),2,function(x){x+intercepts})
@@ -502,13 +520,13 @@ metadata$age_centered <- scale(metadata$age, center = T, scale = F)
 design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
 
 #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
-res_full=resid_DM[,1:(3*ncol(design))]
+res_full=resid_var[,1:(3*ncol(design))]
 colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
 colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_DM[,1:45]
+random_effects=resid_var[,1:45]
 colnames(random_effects)=metadata[1:45,'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
@@ -527,11 +545,24 @@ for(i in 1:ncol(Z)){
 }
 
 #emmreml
-for(i in 1:nrow(resid_DM))
+for(i in 1:nrow(resid_var))
 {
-  emma=emmreml(y=resid_DM[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  emma=emmreml(y=resid_var[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
   random_effects[i,]=t(emma$uhat)
   res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
 }
+
+res_fullvarDF <- as.data.frame(res_full)
+
+ggplot() +
+  geom_histogram(aes(x = res_fullvarDF$p_value_trtNC), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullvarDF$`p_value_trtNC:elo_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullvarDF$`p_value_trtLPS:elo_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullvarDF$`p_value_trtNC:age_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullvarDF$`p_value_trtLPS:age_centered`), bins = 100)
 
 ```
