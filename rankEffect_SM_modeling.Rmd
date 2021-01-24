@@ -76,6 +76,7 @@ library(edgeR)
 library(EMMREML)
 library(cobs)
 library(cowplot)
+library(snakecase)
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 
@@ -472,10 +473,39 @@ ggplot() +
 ggplot() +
   geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.age_centered`), bins = 100)
 ```
+how do those plots change if we cut off the bottom X% of genes?
+```{r pvalue distribution without low GE genes}
+percents <- c(5,10,15,25,50,75)
+
+for (p in percents) {
+  cutoff <- quantile(rowMeans(sge_mean_matrix_nested), c(p/100))
+  
+  plotResFull <- res_fullDF[rowMeans(sge_mean_matrix_nested) > cutoff,]
+  
+  ggplot() +
+    geom_histogram(aes(x = res_fullDF$p_value_trtLPS.elo_centered), alpha = .5, bins = 100) +
+    geom_histogram(aes(x = plotResFull$p_value_trtLPS.elo_centered), bins = 100) +
+    ggtitle(paste0("LPS:elo_centered p-value dist | bottom ",p,"% of genes removed"))
+  ggsave(paste0(figDir,"DM_LPSelo_pvalue_",p,"per_genes_removed.png"))
+}
+
+
+p <- 50
+cutoff <- quantile(rowMeans(sge_mean_matrix_nested), c(p/100))
+
+plotResFull <- res_fullDF[rowMeans(sge_mean_matrix_nested) < cutoff,]
+
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$p_value_trtLPS.elo_centered), alpha = .5, bins = 100, fill = "red") +
+  geom_histogram(aes(x = plotResFull$p_value_trtLPS.elo_centered), bins = 100, fill = "red") +
+  ggtitle(paste0("LPS:elo_centered p-value dist | bottom ",p,"% of genes KEPT"))
+ggsave(paste0(figDir,"DM_LPSelo_pvalue_",p,"per_TOP_genes_kept.png"))
+```
+
 
 
 what if we use variance but control for mean?
-```{r}
+```{r model variance controlling for mean}
 ## Here I'm doing some modeling to ask what are the effects of treatment and rank on variance ##
 ## get some metadata ##
 metadata <- read.table('~/Desktop/SGE_DM/sge_metadata_matrix', header = T) # this files is also in SGE_DM/dataFiles
@@ -505,7 +535,7 @@ metadata$means <- colMeans(sge_mean_matrix_nested)
 
 ##### THEN I CAN CONTROL FOR THE MEAN WITH THE VARIANCES AS THE FOCAL VARIABLE IN PLACE OF DM
 ## regress out group effects from DM ##
-design <- model.matrix(~metadata$means)
+design <- model.matrix(~metadata$means + metadata$group)
 fit <-lmFit(sge_var_matrix_nested,design)
 intercepts=data.frame(eBayes(fit))[,1]
 resid_var=apply(residuals.MArrayLM(object=fit, sge_var_matrix_nested),2,function(x){x+intercepts})
@@ -560,9 +590,221 @@ ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtNC:elo_centered`), bins = 100)
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtLPS:elo_centered`), bins = 100)
+ggsave(paste0(figDir,"varResid_v_mean__LPSelo_pvalue.png"))
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtNC:age_centered`), bins = 100)
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtLPS:age_centered`), bins = 100)
 
 ```
+
+
+Does the variance w/means regressed out remove the mean/variance relationship?
+Plot mean vs variance_resids for a few individuals to observe initial pattern
+```{r plot variance residuals v mean}
+
+p1 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,1],resid_var[,1])) +
+  geom_point(alpha=0.5) +
+  ylim(-500,500) +
+  xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 1') +
+  ylab('variance Resid in gene expression - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,2],resid_var[,2])) +
+  geom_point(alpha=0.5) +
+  ylim(-500,500) +
+  xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 2') +
+  ylab('variance Resid in gene expression - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,3],resid_var[,3])) +
+  geom_point(alpha=0.5) +
+  ylim(-500,500) +
+  xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 3') +
+  ylab('variance Resid in gene expression - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"varResid_v_mean_ge__by_individual.png"))
+```
+
+
+
+how does the effect of DM look in other behavioral variables
+aggDiff
+Aggression Received
+Overall Grooming
+
+```{r}
+behaveData <- read.table("~/Desktop/SGE_DM/SGEII_METADATA_MASTER.txt", header = T)
+
+#phase 1 only
+behaveData <- subset(behaveData, phase == 1)
+
+#animals we need data for
+# behave data is 2 character upper, genomic data is 4 char upper/lower
+needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
+
+#limit behavioral data to correct 45 individs
+behaveData <- subset(behaveData, ID %in% needIDs)
+
+#sort by ID
+behaveData <- behaveData[order(behaveData$ID),]
+
+#match size of metadata object, repeats for NC & LPS
+behaveData <- rbind(behaveData,behaveData)
+
+#get the important variables, centered
+metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
+metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
+metadata$groom_cent <- behaveData$gc.overall.groom
+
+## regress out group effects from DM ##
+design <- model.matrix(~metadata$group)
+fit <-lmFit(sge_DM_matrix_nested,design)
+intercepts=data.frame(eBayes(fit))[,1]
+resid_DM=apply(residuals.MArrayLM(object=fit, sge_DM_matrix_nested),2,function(x){x+intercepts})
+```
+
+aggAsymm
+```{r}
+design = model.matrix(~trt+trt:aggAsymm_cent + trt:age_centered, data=metadata)
+
+#Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+res_full=resid_DM[,1:(3*ncol(design))]
+colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+
+#Declare object random_effects to store in it the individual-wise u random effects
+random_effects=resid_DM[,1:45]
+colnames(random_effects)=metadata[1:45,'ID']
+
+#Define matrix Z describing the sample-to-individual mapping
+K <- read.table('~/Desktop/SGE_DM/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
+rownames(K)[34] <- 'JE11'
+colnames(K)[34] <- 'JE11'
+K=K[unique(metadata$ID),unique(metadata$ID)]
+
+Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+rownames(Z)=metadata$ID
+colnames(Z)=colnames(K)
+for(i in 1:ncol(Z)){
+  set=which(metadata$ID == colnames(Z)[i])
+  Z[set,i]=1
+}
+
+for(i in 1:nrow(resid_DM))
+{
+  emma=emmreml(y=resid_DM[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  random_effects[i,]=t(emma$uhat)
+  res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+}
+
+res_full_aggAsymDF <- as.data.frame(res_full)
+```
+
+Aggression Received
+```{r}
+design = model.matrix(~trt+trt:aggRec_cent + trt:age_centered, data=metadata)
+
+#Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+res_full=resid_DM[,1:(3*ncol(design))]
+colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+
+#Declare object random_effects to store in it the individual-wise u random effects
+random_effects=resid_DM[,1:45]
+colnames(random_effects)=metadata[1:45,'ID']
+
+#Define matrix Z describing the sample-to-individual mapping
+K <- read.table('~/Desktop/SGE_DM/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
+rownames(K)[34] <- 'JE11'
+colnames(K)[34] <- 'JE11'
+K=K[unique(metadata$ID),unique(metadata$ID)]
+
+Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+rownames(Z)=metadata$ID
+colnames(Z)=colnames(K)
+for(i in 1:ncol(Z)){
+  set=which(metadata$ID == colnames(Z)[i])
+  Z[set,i]=1
+}
+
+for(i in 1:nrow(resid_DM))
+{
+  emma=emmreml(y=resid_DM[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  random_effects[i,]=t(emma$uhat)
+  res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+}
+
+res_full_aggRecDF <- as.data.frame(res_full)
+```
+
+Overall Grooming
+```{r}
+design = model.matrix(~trt+trt:groom_cent + trt:age_centered, data=metadata)
+
+#Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+res_full=resid_DM[,1:(3*ncol(design))]
+colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+
+#Declare object random_effects to store in it the individual-wise u random effects
+random_effects=resid_DM[,1:45]
+colnames(random_effects)=metadata[1:45,'ID']
+
+#Define matrix Z describing the sample-to-individual mapping
+K <- read.table('~/Desktop/SGE_DM/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
+rownames(K)[34] <- 'JE11'
+colnames(K)[34] <- 'JE11'
+K=K[unique(metadata$ID),unique(metadata$ID)]
+
+Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+rownames(Z)=metadata$ID
+colnames(Z)=colnames(K)
+for(i in 1:ncol(Z)){
+  set=which(metadata$ID == colnames(Z)[i])
+  Z[set,i]=1
+}
+
+for(i in 1:nrow(resid_DM))
+{
+  emma=emmreml(y=resid_DM[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  random_effects[i,]=t(emma$uhat)
+  res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+}
+
+res_full_groomDF <- as.data.frame(res_full)
+```
+
+```{r}
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$p_value_trtLPS.elo_centered), bins = 100)
+ggsave(paste0(figDir,"DM_v_mean__LPSelo_pvalue.png"))
+
+ggplot() +
+  geom_histogram(aes(x = res_full_aggAsymDF$`p_value_trtLPS:aggAsymm_cent`), bins = 100)
+ggsave(paste0(figDir,"DM_v_mean__LPSagAsymm_pvalue.png"))
+ggplot() +
+  geom_histogram(aes(x = res_full_aggRecDF$`p_value_trtLPS:aggRec_cent`), bins = 100)
+ggsave(paste0(figDir,"DM_v_mean__LPSagRec_pvalue.png"))
+ggplot() +
+  geom_histogram(aes(x = res_full_groomDF$`p_value_trtLPS:groom_cent`), bins = 100)
+ggsave(paste0(figDir,"DM_v_mean__LPSgroom_pvalue.png"))
+
+meanVector <- as.vector(t(sge_mean_matrix_nested))
+ggplot() +
+  geom_histogram(aes(x = meanVector), bins= 50) + scale_y_log10()
+
+```
+
