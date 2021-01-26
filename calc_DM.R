@@ -1,7 +1,7 @@
 #### code for calculating DM from SGE animals ####
 
 ## Load packages ##
-.libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", "~/Rlibs", .libPaths() ) )
+.libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", .libPaths() ) )
 workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
 
 #load(paste0(workDir,"generatePseudobulkMeans.R"))
