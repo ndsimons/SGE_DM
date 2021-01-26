@@ -53,7 +53,7 @@ for (i in ind_list){
   rownames(pseudobulk) <- rownames(normalized_data)
   pseudobulk <- as.data.frame(pseudobulk)
   object_pseudobulkMeans <- pseudobulk
-  assign(value = object_pseudobulkMeans, x = paste(i,"_pbMean", sep=""))
+  assign(value = object_pseudobulkMeans, x = paste(i,"_NC_counts_pbMean", sep=""))
   
   #move the counts to another object for mean, var, DM calcs
   tmp2 <- as.matrix(GetAssayData(tmp, assay = "RNA", slot = "counts"))    
@@ -116,7 +116,7 @@ sge_NC_var_matrix <- t(bind_rows(Ai10_NC_counts_var,Az15_NC_counts_var,Bi10_NC_c
 sge_NC_var_matrix <- na.omit(sge_NC_var_matrix)
 colnames(sge_NC_var_matrix) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
 
-sge_NC_pbMean_matrix <- t(bind_rows(Ai10_NC_counts_pbMean,Az15_NC_counts_pbMean,Bi10_NC_counts_pbMean,Bm7_NC_counts_pbMean,Bw12_NC_counts_pbMean,Cg16_NC_counts_pbMean,Cl13_NC_counts_pbMean,Dj15_NC_counts_pbMean,DV2J_NC_counts_pbMean,Ed8_NC_counts_pbMean,Et12_NC_counts_pbMean,Fw12_NC_counts_pbMean,Fy11_NC_counts_pbMean,Ga13_NC_counts_pbMean,Gl11_NC_counts_pbMean,Gq10_NC_counts_pbMean,Gu10_NC_counts_pbMean,Ht8_NC_counts_pbMean,Ie6_NC_counts_pbMean,Ik6_NC_counts_pbMean,JE11_NC_counts_pbMean,JVA_NC_counts_pbMean,Kk13_NC_counts_pbMean,Lm8_NC_counts_pbMean,Lo9_NC_counts_pbMean,Mg12_NC_counts_pbMean,mo_NC_counts_pbMean,Nn10_NC_counts_pbMean,Ph7_NC_counts_pbMean,Pt8_NC_counts_pbMean,Pz13_NC_counts_pbMean,Qt8_NC_counts_pbMean,Qv5_NC_counts_pbMean,Rn9_NC_counts_pbMean,Rz6_NC_counts_pbMean,Sd4_NC_counts_pbMean,Sm8_NC_counts_pbMean,Ss10_NC_counts_pbMean,Ta11_NC_counts_pbMean,Tm13_NC_counts_pbMean,Tr13_NC_counts_pbMean,Vt12_NC_counts_pbMean,Wm14_NC_counts_pbMean,Yr14_NC_counts_pbMean,Yz6_NC_counts_pbMean))
+sge_NC_pbMean_matrix <- cbind(Ai10_NC_counts_pbMean,Az15_NC_counts_pbMean,Bi10_NC_counts_pbMean,Bm7_NC_counts_pbMean,Bw12_NC_counts_pbMean,Cg16_NC_counts_pbMean,Cl13_NC_counts_pbMean,Dj15_NC_counts_pbMean,DV2J_NC_counts_pbMean,Ed8_NC_counts_pbMean,Et12_NC_counts_pbMean,Fw12_NC_counts_pbMean,Fy11_NC_counts_pbMean,Ga13_NC_counts_pbMean,Gl11_NC_counts_pbMean,Gq10_NC_counts_pbMean,Gu10_NC_counts_pbMean,Ht8_NC_counts_pbMean,Ie6_NC_counts_pbMean,Ik6_NC_counts_pbMean,JE11_NC_counts_pbMean,JVA_NC_counts_pbMean,Kk13_NC_counts_pbMean,Lm8_NC_counts_pbMean,Lo9_NC_counts_pbMean,Mg12_NC_counts_pbMean,mo_NC_counts_pbMean,Nn10_NC_counts_pbMean,Ph7_NC_counts_pbMean,Pt8_NC_counts_pbMean,Pz13_NC_counts_pbMean,Qt8_NC_counts_pbMean,Qv5_NC_counts_pbMean,Rn9_NC_counts_pbMean,Rz6_NC_counts_pbMean,Sd4_NC_counts_pbMean,Sm8_NC_counts_pbMean,Ss10_NC_counts_pbMean,Ta11_NC_counts_pbMean,Tm13_NC_counts_pbMean,Tr13_NC_counts_pbMean,Vt12_NC_counts_pbMean,Wm14_NC_counts_pbMean,Yr14_NC_counts_pbMean,Yz6_NC_counts_pbMean)
 sge_NC_pbMean_matrix <- na.omit(sge_NC_pbMean_matrix)
 colnames(sge_NC_pbMean_matrix) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
 
@@ -157,7 +157,7 @@ for (i in ind_list){
   rownames(pseudobulk) <- rownames(normalized_data)
   pseudobulk <- as.data.frame(pseudobulk)
   object_pseudobulkMeans <- pseudobulk
-  assign(value = object_pseudobulkMeans, x = paste(i,"_pbMean", sep=""))
+  assign(value = object_pseudobulkMeans, x = paste(i,"_LPS_counts_pbMean", sep=""))
   
   #move the counts to another object for mean, var, DM calcs
   tmp2 <- as.matrix(GetAssayData(tmp, assay = "RNA", slot = "counts"))    
@@ -220,7 +220,7 @@ sge_LPS_var_matrix <- t(bind_rows(Ai10_LPS_counts_var,Az15_LPS_counts_var,Bi10_L
 sge_LPS_var_matrix <- na.omit(sge_LPS_var_matrix)
 colnames(sge_LPS_var_matrix) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
 
-sge_LPS_pbMean_matrix <- t(bind_rows(Ai10_LPS_counts_pbMean,Az15_LPS_counts_pbMean,Bi10_LPS_counts_pbMean,Bm7_LPS_counts_pbMean,Bw12_LPS_counts_pbMean,Cg16_LPS_counts_pbMean,Cl13_LPS_counts_pbMean,Dj15_LPS_counts_pbMean,DV2J_LPS_counts_pbMean,Ed8_LPS_counts_pbMean,Et12_LPS_counts_pbMean,Fw12_LPS_counts_pbMean,Fy11_LPS_counts_pbMean,Ga13_LPS_counts_pbMean,Gl11_LPS_counts_pbMean,Gq10_LPS_counts_pbMean,Gu10_LPS_counts_pbMean,Ht8_LPS_counts_pbMean,Ie6_LPS_counts_pbMean,Ik6_LPS_counts_pbMean,JE11_LPS_counts_pbMean,JVA_LPS_counts_pbMean,Kk13_LPS_counts_pbMean,Lm8_LPS_counts_pbMean,Lo9_LPS_counts_pbMean,Mg12_LPS_counts_pbMean,mo_LPS_counts_pbMean,Nn10_LPS_counts_pbMean,Ph7_LPS_counts_pbMean,Pt8_LPS_counts_pbMean,Pz13_LPS_counts_pbMean,Qt8_LPS_counts_pbMean,Qv5_LPS_counts_pbMean,Rn9_LPS_counts_pbMean,Rz6_LPS_counts_pbMean,Sd4_LPS_counts_pbMean,Sm8_LPS_counts_pbMean,Ss10_LPS_counts_pbMean,Ta11_LPS_counts_pbMean,Tm13_LPS_counts_pbMean,Tr13_LPS_counts_pbMean,Vt12_LPS_counts_pbMean,Wm14_LPS_counts_pbMean,Yr14_LPS_counts_pbMean,Yz6_LPS_counts_pbMean))
+sge_LPS_pbMean_matrix <- cbind(Ai10_LPS_counts_pbMean,Az15_LPS_counts_pbMean,Bi10_LPS_counts_pbMean,Bm7_LPS_counts_pbMean,Bw12_LPS_counts_pbMean,Cg16_LPS_counts_pbMean,Cl13_LPS_counts_pbMean,Dj15_LPS_counts_pbMean,DV2J_LPS_counts_pbMean,Ed8_LPS_counts_pbMean,Et12_LPS_counts_pbMean,Fw12_LPS_counts_pbMean,Fy11_LPS_counts_pbMean,Ga13_LPS_counts_pbMean,Gl11_LPS_counts_pbMean,Gq10_LPS_counts_pbMean,Gu10_LPS_counts_pbMean,Ht8_LPS_counts_pbMean,Ie6_LPS_counts_pbMean,Ik6_LPS_counts_pbMean,JE11_LPS_counts_pbMean,JVA_LPS_counts_pbMean,Kk13_LPS_counts_pbMean,Lm8_LPS_counts_pbMean,Lo9_LPS_counts_pbMean,Mg12_LPS_counts_pbMean,mo_LPS_counts_pbMean,Nn10_LPS_counts_pbMean,Ph7_LPS_counts_pbMean,Pt8_LPS_counts_pbMean,Pz13_LPS_counts_pbMean,Qt8_LPS_counts_pbMean,Qv5_LPS_counts_pbMean,Rn9_LPS_counts_pbMean,Rz6_LPS_counts_pbMean,Sd4_LPS_counts_pbMean,Sm8_LPS_counts_pbMean,Ss10_LPS_counts_pbMean,Ta11_LPS_counts_pbMean,Tm13_LPS_counts_pbMean,Tr13_LPS_counts_pbMean,Vt12_LPS_counts_pbMean,Wm14_LPS_counts_pbMean,Yr14_LPS_counts_pbMean,Yz6_LPS_counts_pbMean)
 sge_LPS_pbMean_matrix <- na.omit(sge_LPS_pbMean_matrix)
 colnames(sge_LPS_pbMean_matrix) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
 
