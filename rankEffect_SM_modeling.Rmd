@@ -5,7 +5,7 @@ date: "1/12/2021"
 output: html_document
 ---
 
-load perm.fdr function
+load helpful functions
 ```{r}
 perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
@@ -67,6 +67,24 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
   return(fdrs_df)
 }
+
+
+plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model") {
+  #emmremlDF <- res_fullDF
+  #folderName <- figDir
+  
+  nVars <- dim(emmremlDF)[2] / 3
+  
+  colNums <- (2 * nVars + 1) : (3 * nVars)
+  
+  for (c in colNums) {
+    ggplot() +
+      geom_histogram(aes(x = emmremlDF[,c]), bins = 100) +
+      xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName))
+    ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",str_replace(colnames(emmremlDF)[c],":","_"),".png"), width = 6, height = 4)
+  }
+}
+
 ```
 
 ```{r data, include=FALSE}
@@ -77,6 +95,8 @@ library(EMMREML)
 library(cobs)
 library(cowplot)
 library(snakecase)
+library(stringr)
+library(qvalue)
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 
@@ -109,54 +129,54 @@ Plot mean vs variance for a few individuals to observe initial pattern
 ```{r}
 p1 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,1],sge_NC_var_matrix[,1])) +
   geom_point(alpha=0.5) +
-  ylim(0,1000) +
-  xlim(0,50) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
-  xlab('mean gene expression - individual 1') +
+  xlab('mean ge - individual 1') +
   ylab('variance in gene expression - individual 1') +
   theme_minimal()
 p2 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,2],sge_NC_var_matrix[,2])) +
   geom_point(alpha=0.5) +
-  ylim(0,1000) +
-  xlim(0,50) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
-  xlab('mean gene expression - individual 2') +
+  xlab('mean ge - individual 2') +
   ylab('variance in gene expression - individual 2') +
   theme_minimal()
 p3 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,3],sge_NC_var_matrix[,3])) +
   geom_point(alpha=0.5) +
-  ylim(0,1000) +
-  xlim(0,50) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
-  xlab('mean gene expression - individual 3') +
+  xlab('mean ge - individual 3') +
   ylab('variance in gene expression - individual 3') +
   theme_minimal()
 
 plot_grid(p1,p2,p3, ncol = 3)
-ggsave(paste0(figDir,"var_v_mean_ge__by_individual.png"))
+ggsave(paste0(figDir,"var_v_mean_ge__by_individual_noLim.png"))
 ```
 
 You can pretty clearly see the mean variance relationship, now plot mean vs DM for same individuals
 ```{r}
 p1 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,1],sge_NC_DM_matrix[,1])) +
   geom_point(alpha=0.5) +
-  xlim(0,50) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black') +
-  xlab('mean gene expression - individual 1') +
+  xlab('mean ge - individual 1') +
   ylab('DM - individual 1') +
   theme_minimal()
 p2 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,2],sge_NC_DM_matrix[,2])) +
   geom_point(alpha=0.5) +
-  xlim(0,50) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black') +
-  xlab('mean gene expression - individual 2') +
+  xlab('mean ge - individual 2') +
   ylab('DM - individual 2') +
   theme_minimal()
 p3 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,3],sge_NC_DM_matrix[,3])) +
   geom_point(alpha=0.5) +
-  xlim(0,50) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black') +
-  xlab('mean gene expression - individual 3') +
+  xlab('mean ge - individual 3') +
   ylab('DM - individual 3') +
   theme_minimal()
 
@@ -214,7 +234,7 @@ rownames(sge_DM_matrix_nested) <- sge_DM_matrix_nested$Row.names
 sge_DM_matrix_nested$Row.names <- NULL
 ```
 
-Is controlling for group necessary?
+Is controlling for group necessary? (looks like yes)
 ```{r}
 #no control for group
 pcaNoLM <- prcomp(cor(sge_DM_matrix_nested, method = "spearman"))
@@ -343,6 +363,54 @@ for(i in 1:nrow(resid_DM))
   res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
 }
 
+res_fullDF <- data.frame(res_full)
+```
+
+```{r direction of LPS effect}
+
+qobj <- qvalue(p = res_fullDF$p_value_trtNC, fdr.level = .1)
+
+res_fullDF_qSig <- res_fullDF[qobj$significant,]
+
+#what is the direction of the genes that pass an FDR < 0.10
+
+ggplot() +
+  geom_histogram(aes(x = (res_fullDF$p_value_trtNC)), bins = 100)
+
+ggplot() +
+  geom_histogram(aes(x = (qobj$qvalues)), bins = 100) +
+  geom_histogram(aes(x = (qobj$pvalues)), alpha = .5, bins = 100)
+
+
+ggplot() +
+  geom_point(aes(x = res_fullDF$beta_trtNC, y = -log10(res_fullDF$p_value_trtNC)))
+
+ggplot() +
+  geom_point(aes(x = res_fullDF_qSig$beta_trtNC, y = -log10(res_fullDF_qSig$p_value_trtNC)))
+
+ggplot() +
+  geom_histogram(aes(x = res_fullDF_qSig$beta_trtNC), bins = 100) +
+  geom_vline(xintercept = mean(res_fullDF_qSig$beta_trtNC)) +
+  xlim(c(-1.05,1.05))
+```
+
+
+```{r}
+
+plotModelHists(res_fullDF, folderName = figDir, modelName = "DM_model")
+
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$p_value_.Intercept.), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$p_value_trtNC), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtNC.elo_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.elo_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtNC.age_centered`), bins = 100)
+ggplot() +
+  geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.age_centered`), bins = 100)
 ```
 
 
@@ -454,25 +522,19 @@ for(iter in 1:iters)
 ```{r}
 ### Ryan, this is the part that is breaking, let me know if it works for you ###
 
-res_fullDF <- data.frame(res_full)
+
 
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNC")
 
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
 
 res_fullDF <- perm.fdr(res_fullDF,shuffled_elos_pvals_LPS_effect,"p_value_trtNC","test")
-
-ggplot() +
-  geom_histogram(aes(x = res_fullDF$p_value_trtNC), bins = 100)
-ggplot() +
-  geom_histogram(aes(x = res_fullDF$`p_value_trtNC.elo_centered`), bins = 100)
-ggplot() +
-  geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.elo_centered`), bins = 100)
-ggplot() +
-  geom_histogram(aes(x = res_fullDF$`p_value_trtNC.age_centered`), bins = 100)
-ggplot() +
-  geom_histogram(aes(x = res_fullDF$`p_value_trtLPS.age_centered`), bins = 100)
 ```
+
+
+
+
+
 how do those plots change if we cut off the bottom X% of genes?
 ```{r pvalue distribution without low GE genes}
 percents <- c(5,10,15,25,50,75)
@@ -530,6 +592,10 @@ sge_mean_matrix_nested <- merge(sge_NC_mean_matrix,sge_LPS_mean_matrix, by=0)
 rownames(sge_mean_matrix_nested) <- sge_mean_matrix_nested$Row.names
 sge_mean_matrix_nested$Row.names <- NULL
 
+ggplot() +
+  geom_histogram(aes(x = rowMeans(sge_mean_matrix_nested)), bins = 50) +
+  xlim(c(0,5))
+
 ##### AND ADD THAT TO METADATA
 metadata$means <- colMeans(sge_mean_matrix_nested)
 
@@ -584,19 +650,37 @@ for(i in 1:nrow(resid_var))
 
 res_fullvarDF <- as.data.frame(res_full)
 
+plotModelHists(res_fullvarDF, folderName = figDir, modelName = "Var_model_control_mean")
+
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$p_value_trtNC), bins = 100)
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtNC:elo_centered`), bins = 100)
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtLPS:elo_centered`), bins = 100)
-ggsave(paste0(figDir,"varResid_v_mean__LPSelo_pvalue.png"))
+
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtNC:age_centered`), bins = 100)
 ggplot() +
   geom_histogram(aes(x = res_fullvarDF$`p_value_trtLPS:age_centered`), bins = 100)
 
 ```
+
+```{r}
+individMeans <- as.vector(t(sge_mean_matrix_nested))
+
+ggplot() +
+  geom_histogram(aes(x = rowMeans(sge_mean_matrix_nested)), bins = 100)
+
+ggplot() +
+  geom_histogram(aes(x = individMeans), bins = 31) +
+  xlim(c(0,30))
+
+sum(individMeans < 2) / length(individMeans)
+sum(individMeans < 1) / length(individMeans)
+sum(individMeans < .5) / length(individMeans)
+```
+
 
 
 Does the variance w/means regressed out remove the mean/variance relationship?
@@ -605,24 +689,24 @@ Plot mean vs variance_resids for a few individuals to observe initial pattern
 
 p1 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,1],resid_var[,1])) +
   geom_point(alpha=0.5) +
-  ylim(-500,500) +
-  xlim(0,50) +
+  #ylim(-500,500) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
   xlab('mean gene expression - individual 1') +
   ylab('variance Resid in gene expression - individual 1') +
   theme_minimal()
 p2 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,2],resid_var[,2])) +
   geom_point(alpha=0.5) +
-  ylim(-500,500) +
-  xlim(0,50) +
+  #ylim(-500,500) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
   xlab('mean gene expression - individual 2') +
   ylab('variance Resid in gene expression - individual 2') +
   theme_minimal()
 p3 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,3],resid_var[,3])) +
   geom_point(alpha=0.5) +
-  ylim(-500,500) +
-  xlim(0,50) +
+  #ylim(-500,500) +
+  #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
   xlab('mean gene expression - individual 3') +
   ylab('variance Resid in gene expression - individual 3') +
@@ -707,6 +791,8 @@ for(i in 1:nrow(resid_DM))
 }
 
 res_full_aggAsymDF <- as.data.frame(res_full)
+
+plotModelHists(res_full_aggAsymDF, folderName = figDir, modelName = "DM_model_AgAsym")
 ```
 
 Aggression Received
@@ -746,6 +832,7 @@ for(i in 1:nrow(resid_DM))
 }
 
 res_full_aggRecDF <- as.data.frame(res_full)
+plotModelHists(res_full_aggRecDF, folderName = figDir, modelName = "DM_model_AgRec")
 ```
 
 Overall Grooming
@@ -785,6 +872,7 @@ for(i in 1:nrow(resid_DM))
 }
 
 res_full_groomDF <- as.data.frame(res_full)
+plotModelHists(res_full_groomDF, folderName = figDir, modelName = "DM_model_groom")
 ```
 
 ```{r}
