@@ -137,7 +137,7 @@ for (i in countsFiles){
   tmp<-get(i)
   meanGenes <- rowMeans(tmp)
   CV2Genes <- apply(tmp , 1, var) / meanGenes^2
-  varGenes <- rowVars(tmp)
+  varGenes <- rowVars(as.matrix(tmp))
   names(meanGenes) <- rownames(tmp)
   names(CV2Genes) <- rownames(tmp)
   names(varGenes) <- rownames(tmp)
@@ -201,7 +201,7 @@ for (i in countsFiles){
   tmp<-get(i)
   meanGenes <- rowMeans(tmp)
   CV2Genes <- apply(tmp , 1, var) / meanGenes^2
-  varGenes <- rowVars(tmp)
+  varGenes <- rowVars(as.matrix(tmp))
   names(meanGenes) <- rownames(tmp)
   names(CV2Genes) <- rownames(tmp)
   names(varGenes) <- rownames(tmp)
