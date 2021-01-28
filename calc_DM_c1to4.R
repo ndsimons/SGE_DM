@@ -30,7 +30,7 @@ rm(sge_pbmc)
 
 #NC first
 treatment <- "NC"
-for (clusterNum in 1:4) {
+for (clusterNum in 1:2) {
 
   ## extract and assign the raw single-cell count data for each individual ## 
   ind_list <- unique(sge_pbmc_NC$ID)
@@ -144,7 +144,7 @@ for (clusterNum in 1:4) {
                               get(paste0("Lm8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                               get(paste0("Lo9","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                               get(paste0("Mg12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                              get(paste0("mo_N","_",treatment,"_counts_c",cNumDouble,"_",metric)),
+                              get(paste0("mo","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                               get(paste0("Nn10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                               get(paste0("Ph7","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                               get(paste0("Pt8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
@@ -290,7 +290,7 @@ for (clusterNum in 1:4) {
                              get(paste0("Lm8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                              get(paste0("Lo9","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                              get(paste0("Mg12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("mo_N","_",treatment,"_counts_c",cNumDouble,"_",metric)),
+                             get(paste0("mo","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                              get(paste0("Nn10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                              get(paste0("Ph7","_",treatment,"_counts_c",cNumDouble,"_",metric)),
                              get(paste0("Pt8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
