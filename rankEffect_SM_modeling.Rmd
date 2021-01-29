@@ -1324,46 +1324,66 @@ compare elo with other behaviors in DM in clusters
 sge_LPS_DM_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c01_DM_matrix')
 sge_LPS_mean_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c01_mean_matrix')
 sge_LPS_var_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c01_var_matrix')
+sge_LPS_pbMean_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c01_pbMean_matrix')
+sge_LPS_DMpb_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c01_DMpb_matrix')
 
 sge_NC_DM_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c01_DM_matrix')
 sge_NC_mean_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c01_mean_matrix')
 sge_NC_var_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c01_var_matrix')
+sge_NC_pbMean_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c01_pbMean_matrix')
+sge_NC_DMpb_matrix <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c01_DMpb_matrix')
 
+## remove genes w/NAas DM values for more than 5 individuals, from NC & LPS DM
 
-## remove genes w/0 as DM values for every individual
-## don't have to remove them from 
-sge_LPS_DM_matrix <- sge_LPS_DM_matrix[rowSums(sge_LPS_DM_matrix) != 0,]
-sge_NC_DM_matrix <- sge_NC_DM_matrix[rowSums(sge_NC_DM_matrix) != 0,]
+numberNAs <- vector()
 
-## remove chrMT counts
-#sge_LPS_DM_matrix <- sge_LPS_DM_matrix[rownames(sge_LPS_DM_matrix) != "chrMT",]
-#sge_NC_DM_matrix <- sge_NC_DM_matrix[rownames(sge_NC_DM_matrix) != "chrMT",]
+for (r in 1:dim(sge_NC_DM_matrix)[1]) {
+  numberNAs[r] <- sum(is.na(sge_NC_DM_matrix[r,]))
+}
+sge_NC_DM_matrix <- sge_NC_DM_matrix[numberNAs < 6,]
+
+numberNAs <- vector()
+for (r in 1:dim(sge_LPS_DM_matrix)[1]) {
+  numberNAs[r] <- sum(is.na(sge_LPS_DM_matrix[r,]))
+}
+sge_LPS_DM_matrix <- sge_LPS_DM_matrix[numberNAs < 6,]
+
 
 ## only use common set of genes - must exist in all matrices (8)
 geneList <- rownames(table(c(rownames(sge_NC_DM_matrix),
             rownames(sge_NC_var_matrix),
             rownames(sge_NC_mean_matrix),
+            rownames(sge_NC_pbMean_matrix),
+            rownames(sge_NC_DMpb_matrix),
             rownames(sge_LPS_DM_matrix),
             rownames(sge_LPS_var_matrix),
-            rownames(sge_LPS_mean_matrix))))[table(c(rownames(sge_NC_DM_matrix),
+            rownames(sge_LPS_mean_matrix),
+            rownames(sge_LPS_pbMean_matrix),
+            rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_DM_matrix),
             rownames(sge_NC_var_matrix),
             rownames(sge_NC_mean_matrix),
+            rownames(sge_NC_pbMean_matrix),
+            rownames(sge_NC_DMpb_matrix),
             rownames(sge_LPS_DM_matrix),
             rownames(sge_LPS_var_matrix),
-            rownames(sge_LPS_mean_matrix))) == 6]
+            rownames(sge_LPS_mean_matrix),
+            rownames(sge_LPS_pbMean_matrix),
+            rownames(sge_LPS_DMpb_matrix))) == 10]
 
 geneList <- geneList[geneList != "chrMT"]
 
 ## subset mean and variance data frames to include only the genes present in the DM data frame ##
 sge_NC_DM_matrix <- subset(sge_NC_DM_matrix, rownames(sge_NC_DM_matrix) %in% geneList)
-sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% geneList)
+sge_NC_pbMean_matrix <- subset(sge_NC_pbMean_matrix, rownames(sge_NC_pbMean_matrix) %in% geneList)
 sge_NC_var_matrix <- subset(sge_NC_var_matrix, rownames(sge_NC_var_matrix) %in% geneList)
-
+sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% geneList)
+sge_NC_DMpb_matrix <- subset(sge_NC_DMpb_matrix, rownames(sge_NC_DMpb_matrix) %in% geneList)
 
 sge_LPS_DM_matrix <- subset(sge_LPS_DM_matrix, rownames(sge_LPS_DM_matrix) %in% geneList)
 sge_LPS_mean_matrix <- subset(sge_LPS_mean_matrix, rownames(sge_LPS_mean_matrix) %in% geneList)
 sge_LPS_var_matrix <- subset(sge_LPS_var_matrix, rownames(sge_LPS_var_matrix) %in% geneList)
-
+sge_LPS_pbMean_matrix <- subset(sge_LPS_pbMean_matrix, rownames(sge_LPS_pbMean_matrix) %in% geneList)
+sge_LPS_DMpb_matrix <- subset(sge_LPS_DMpb_matrix, rownames(sge_LPS_DMpb_matrix) %in% geneList)
 
 ```
 
@@ -1449,6 +1469,90 @@ p3 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,3],sge_NC_DM_matrix[,3]
 plot_grid(p1,p2,p3, ncol = 3)
 ggsave(paste0(figDir,"DM_v_mean_ge__by_individual_c01.png"))
 ```
+v pbMean instead of raw mean
+```{r}
+p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_var_matrix[,1])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean ge - individual 1') +
+  ylab('variance in gene expression - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_var_matrix[,2])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean ge - individual 2') +
+  ylab('variance in gene expression - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_var_matrix[,3])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean ge - individual 3') +
+  ylab('variance in gene expression - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"var_v_pbMean_ge__by_individual_noLim_c01.png"))
+
+p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_var_matrix[,1])) +
+  geom_point(alpha=0.5) +
+  ylim(0,250) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean ge - individual 1') +
+  ylab('variance in gene expression - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_var_matrix[,2])) +
+  geom_point(alpha=0.5) +
+  ylim(0,250) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean ge - individual 2') +
+  ylab('variance in gene expression - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_var_matrix[,3])) +
+  geom_point(alpha=0.5) +
+  ylim(0,250) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean ge - individual 3') +
+  ylab('variance in gene expression - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"var_v_pbMean_ge__by_individual_yLim250_c01.png"))
+
+p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DM_matrix[,1])) +
+  geom_point(alpha=0.5) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black') +
+  xlab('mean ge - individual 1') +
+  ylab('DM - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DM_matrix[,2])) +
+  geom_point(alpha=0.5) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black') +
+  xlab('mean ge - individual 2') +
+  ylab('DM - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DM_matrix[,3])) +
+  geom_point(alpha=0.5) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black') +
+  xlab('mean ge - individual 3') +
+  ylab('DM - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"DM_v_pbMean_ge__by_individual_c01.png"))
+```
+
 
 log scale the mean
 ```{r}
@@ -1548,6 +1652,39 @@ ggsave(paste0(figDir,"DM_v_log2_mean_ge__by_individual_c01.png"))
 
 ```
 
+v pbMean instead of raw mean
+```{r}
+p1 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,1],sge_NC_DM_matrix[,1])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('DM - individual 1') +
+  ylab('DM from pbMean - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,2],sge_NC_DM_matrix[,2])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('DM - individual 2') +
+  ylab('DM from pbMean - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,3],sge_NC_DM_matrix[,3])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('DM - individual 3') +
+  ylab('DM from pbMean - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"var_v_pbMean_ge__by_individual_noLim_c01.png"))
+
+```
+
+
 ```{r nest the matrices}
 
 ## generate a dataframe of NC and LPS combined ##
@@ -1558,7 +1695,7 @@ sge_DM_matrix_nested$Row.names <- NULL
 ```
 
 
-```{r fixe metadata c01}
+```{r fix metadata c01}
 ## regress out group effects from DM ##
 design <- model.matrix(~metadata$group)
 fit <-lmFit(sge_DM_matrix_nested,design)
