@@ -178,6 +178,21 @@ sge_LPS_DMpb_matrix <- subset(sge_LPS_DMpb_matrix, rownames(sge_LPS_DMpb_matrix)
 sge_DM_matrix_nested <- merge(sge_NC_DM_matrix,sge_LPS_DM_matrix, by=0)
 rownames(sge_DM_matrix_nested) <- sge_DM_matrix_nested$Row.names
 sge_DM_matrix_nested$Row.names <- NULL
+
+#one for pbMeans as well
+sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+sge_pbMean_matrix_nested$Row.names <- NULL
+
+#and raw means and variances to use in the variance model
+sge_mean_matrix_nested <- merge(sge_NC_mean_matrix,sge_LPS_mean_matrix, by=0)
+rownames(sge_mean_matrix_nested) <- sge_mean_matrix_nested$Row.names
+sge_mean_matrix_nested$Row.names <- NULL
+
+sge_var_matrix_nested <- merge(sge_NC_var_matrix,sge_LPS_var_matrix, by=0)
+rownames(sge_var_matrix_nested) <- sge_var_matrix_nested$Row.names
+sge_var_matrix_nested$Row.names <- NULL
+
 ```
 
 ```{r metadata and take residuals}
@@ -229,6 +244,12 @@ design <- model.matrix(~metadata$group)
 fit <-lmFit(sge_DM_matrix_nested,design)
 intercepts=data.frame(eBayes(fit))[,1]
 resid_DM=apply(residuals.MArrayLM(object=fit, sge_DM_matrix_nested),2,function(x){x+intercepts})
+
+## regress out group effects from pbMean ##
+design <- model.matrix(~metadata$group)
+fit <-lmFit(sge_pbMean_matrix_nested,design)
+intercepts=data.frame(eBayes(fit))[,1]
+resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
 ```
 
 ```{r qc plots}
@@ -688,3 +709,182 @@ assign(value = data.frame(res_full), x = paste0("res_full_groomDF_c",cluster))
 plotModelHists(get(paste0("res_full_groomDF_c",cluster)), folderName = figDir, modelName = paste0("DM_model_groom_c",cluster))
 
 ```
+
+data QC - how do significant genes from the betas of var (control for mean) model compare to DM?
+did fixing the DM values to 0 alter that?
+
+```{r model variance controlling for mean}
+## Here I'm doing some modeling to ask what are the effects of treatment and rank on variance ##
+## get some metadata ##
+
+
+##### AND ADD THAT TO METADATA
+metadata$means <- colMeans(sge_mean_matrix_nested)
+
+##### THEN I CAN CONTROL FOR THE MEAN WITH THE VARIANCES AS THE FOCAL VARIABLE IN PLACE OF DM
+## regress out group effects from DM ##
+design <- model.matrix(~metadata$means + metadata$group)
+fit <-lmFit(sge_var_matrix_nested,design)
+intercepts=data.frame(eBayes(fit))[,1]
+resid_varMean=apply(residuals.MArrayLM(object=fit, sge_var_matrix_nested),2,function(x){x+intercepts})
+
+design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
+
+#Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+res_full=resid_varMean[,1:(3*ncol(design))]
+colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+
+#Declare object random_effects to store in it the individual-wise u random effects
+random_effects=resid_varMean[,1:45]
+colnames(random_effects)=metadata[1:45,'ID']
+
+#Define matrix Z describing the sample-to-individual mapping
+K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
+rownames(K)[34] <- 'JE11'
+colnames(K)[34] <- 'JE11'
+K=K[unique(metadata$ID),unique(metadata$ID)]
+
+Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+rownames(Z)=metadata$ID
+colnames(Z)=colnames(K)
+for(i in 1:ncol(Z)){
+  set=which(metadata$ID == colnames(Z)[i])
+  Z[set,i]=1
+}
+
+#emmreml
+for(i in 1:nrow(resid_varMean))
+{
+  emma=emmreml(y=resid_varMean[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  random_effects[i,]=t(emma$uhat)
+  res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+}
+
+assign(value = data.frame(res_full), x = paste0("res_fullDF_var_c",cluster))
+plotModelHists(get(paste0("res_fullDF_var_c",cluster)), folderName = figDir, modelName = paste0("Var_model_c",cluster))
+
+```
+
+
+```{r}
+
+res_fullvarDF <- get(paste0("res_fullDF_var_c",cluster))
+res_fullDF <- get(paste0("res_fullDFc",cluster))
+
+lpsEloR <- cor.test(res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+                    res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5)$estimate
+
+ggplot() +
+  geom_point(aes(x = res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+                 y = res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5),
+             alpha = .1) +
+  xlab("variance model - std betas LPS:elo") +
+  ylab("DM model - std betas LPS:elo") +
+  geom_smooth(aes(x = res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+                 y = res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5), method = "lm") +
+  geom_text(aes(x = .95 * min(res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5),
+                y = .95 * max(res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5)),
+                label = paste0("R = ",round(lpsEloR, digits = 3)))
+ggsave(paste0(figDir,"stdBeta_comp_LPSelo_DM_v_Var_c",cluster,".png"))
+
+
+trtR <- cor.test(res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+                 res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5)$estimate
+
+ggplot() +
+  geom_point(aes(x = res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+                 y = res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5),
+             alpha = .1) +
+  xlab("variance model - std betas LPS") +
+  ylab("DM model - std betas LPS") +
+  geom_smooth(aes(x = res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+                 y = res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5), method = "lm") +
+  geom_text(aes(x = .95 * min(res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5),
+                y = .95 * max(res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5)),
+                label = paste0("R = ",round(trtR, digits = 3)))
+ggsave(paste0(figDir,"stdBeta_comp_Trt_DM_v_Var_c",cluster,".png"))
+
+VARstdBetas <- res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5
+DMstdBetas <- res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5
+
+ggplot() +
+  geom_histogram(aes(x = VARstdBetas), fill = "red", alpha = .4, bins = 50) +
+  geom_histogram(aes(x = DMstdBetas), fill = "blue", alpha = .4, bins = 50) +
+  xlab("Treatment Standardized Betas (----> Higher Var in NC)") +
+  geom_text(aes(x = -20,
+                y = 850,
+                label = "Var Model"), col = "red") +
+  geom_text(aes(x = -20,
+                y = 700,
+                label = "DM Model"), col = "blue")
+
+ggsave(paste0(figDir,"stdBeta_hist_Trt_DM_and_Var__c",cluster,".png"))
+
+DMstdBetasSIG <- DMstdBetas[qvalue(p = res_fullDF$p_value_trtNC, fdr.level = .1)$significant]
+VARstdBetasSIG <- VARstdBetas[qvalue(p = res_fullvarDF$p_value_trtNC, fdr.level = .1)$significant]
+
+ggplot() +
+  geom_histogram(aes(x = VARstdBetasSIG), fill = "red", alpha = .4, bins = 50) +
+  geom_histogram(aes(x = DMstdBetasSIG), fill = "blue", alpha = .4, bins = 50) +
+  xlab("Significant Treatment Standardized Betas (----> Higher Var in NC)") +
+  geom_text(aes(x = -20,
+                y = 750,
+                label = "Var Model"), col = "red") +
+  geom_text(aes(x = -20,
+                y = 700,
+                label = "DM Model"), col = "blue")
+
+ggsave(paste0(figDir,"stdBeta_hist_Trt_DM_and_Var__sigOnly_c",cluster,".png"))
+```
+
+
+
+data validation possibilities
+are genes that are upregulated in LPS also higher variance in LPS?
+-need to make an elo model but use pbMean instead of DM
+Fit an elo model for each gene using emmreml
+```{r}
+design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
+
+#Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+res_full=resid_pbMean[,1:(3*ncol(design))]
+colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+
+#Declare object random_effects to store in it the individual-wise u random effects
+random_effects=resid_pbMean[,1:45]
+colnames(random_effects)=metadata[1:45,'ID']
+
+#Define matrix Z describing the sample-to-individual mapping
+K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
+rownames(K)[34] <- 'JE11'
+colnames(K)[34] <- 'JE11'
+K=K[unique(metadata$ID),unique(metadata$ID)]
+
+Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+rownames(Z)=metadata$ID
+colnames(Z)=colnames(K)
+for(i in 1:ncol(Z)){
+  set=which(metadata$ID == colnames(Z)[i])
+  Z[set,i]=1
+}
+
+
+
+for(i in 1:nrow(resid_pbMean))
+{
+  emma=emmreml(y=resid_pbMean[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  random_effects[i,]=t(emma$uhat)
+  res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+}
+
+assign(value = data.frame(res_full), x = paste0("res_fullDF_pbMean_c",cluster))
+
+plotModelHists(get(paste0("res_fullDF_pbMean_c",cluster)), folderName = figDir, modelName = paste0("pbMean_model_c",cluster))
+```
+compare outputs
