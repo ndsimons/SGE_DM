@@ -6,6 +6,7 @@
 .libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", .libPaths() ) )
 workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
 
+
 #load(paste0(workDir,"generatePseudobulkMeans.R"))
 
 library(data.table)
@@ -30,7 +31,7 @@ rm(sge_pbmc)
 
 #NC first
 #treatment <- "NC"
-for (clusterNum in c(1)) {
+for (clusterNum in 0:5) {
   for(treatment in c("NC","LPS")) {
   
   ## extract and assign the raw single-cell count data for each individual ## 
@@ -41,7 +42,7 @@ for (clusterNum in c(1)) {
   
   for (i in ind_list){
     print(i)
-    tmp <- subset(sge_pbmc_NC, subset = ID == i)
+    tmp <- subset(get(paste0("sge_pbmc_",treatment)), subset = ID == i)
     #pseudobulk straight from sge object
     obj <- SubsetData(object = tmp, do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterNum)
     sce <- as.SingleCellExperiment(obj, assay="RNA")
@@ -82,6 +83,8 @@ for (clusterNum in c(1)) {
     
     CV2pseudoGenes <- apply(tmp2 , 1, var) / pseudobulk^2
     DMpb <- DM(pseudobulk, CV2pseudoGenes)
+    
+    names(DMpb) <- rownames(tmp2)
     
     assign(value = DMlevels, x = paste(i,"_",treatment,"_counts_c",cNumDouble,"_DM", sep=""))
     assign(value = meanGenes, x = paste(i,"_",treatment,"_counts_c",cNumDouble,"_mean", sep=""))
@@ -125,66 +128,23 @@ for (clusterNum in c(1)) {
   ind_listBAK <- ind_list
   ind_list[which(ind_list == "77_06")] <- "mo"
   
-  
   ## for DM, mean, variance, and pbMeans - generate matrices of values containing all individuals, and remove genes with NAs ##
   #treatment <- "NC"
   #leaving pbMean out for now... cbind v. bind_rows needs to be switched)
   
-  for (metric in c("DM","mean","var","pbMeans","DMpb")) {
-    #metric <- "DM"
-    
-    tmpOutput <- t(bind_rows(get(paste0("Ai10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Az15","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Bi10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Bm7","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Bw12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Cg16","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Cl13","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Dj15","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("DV2J","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ed8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Et12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Fw12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Fy11","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ga13","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Gl11","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Gq10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Gu10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ht8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ie6","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ik6","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("JE11","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("JVA","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Kk13","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Lm8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Lo9","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Mg12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("mo","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Nn10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ph7","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Pt8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Pz13","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Qt8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Qv5","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Rn9","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Rz6","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Sd4","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Sm8","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ss10","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Ta11","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Tm13","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Tr13","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Vt12","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Wm14","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Yr14","_",treatment,"_counts_c",cNumDouble,"_",metric)),
-                             get(paste0("Yz6","_",treatment,"_counts_c",cNumDouble,"_",metric))))
-    tmpOutput <- na.omit(tmpOutput)
-    
-    colnames(tmpOutput) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
-    
-    assign(value = tmpOutput, x = paste0("sge_",treatment,"_",cNumDouble,"_",metric,"_matrix"))
-    
-    write.table(tmpOutput,file=paste0(workDir,paste0("sge_NC_c",cNumDouble,"_",metric,"_matrix")),row.names=T,col.names=T,quote=F,sep='\t')
-  }
+    for (metric in c("DM","mean","var","pbMean","DMpb")) {
+      #metric <- "DM"
+      for (j in ind_list) {
+        tmpOutput <- cbind(tmpOutput,get(paste0(j,"_",treatment,"_counts_c",cNumDouble,"_",metric)))
+  
+        tmpOutput <- na.omit(tmpOutput)
+      
+        colnames(tmpOutput) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
+      
+        assign(value = tmpOutput, x = paste0("sge_",treatment,"_",cNumDouble,"_",metric,"_matrix"))
+      
+        write.table(tmpOutput,file=paste0(workDir,paste0("sge_NC_c",cNumDouble,"_",metric,"_matrix")),row.names=T,col.names=T,quote=F,sep='\t')
+      }
+    }
   }
 }
