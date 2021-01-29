@@ -133,7 +133,9 @@ for (clusterNum in 0:5) {
   #leaving pbMean out for now... cbind v. bind_rows needs to be switched)
   
     for (metric in c("DM","mean","var","pbMean","DMpb")) {
-      #metric <- "DM"
+      
+      tmpOutput <- numeric()
+      
       for (j in ind_list) {
         tmpOutput <- cbind(tmpOutput,get(paste0(j,"_",treatment,"_counts_c",cNumDouble,"_",metric)))
   
