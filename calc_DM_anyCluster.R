@@ -37,6 +37,7 @@ for (clusterNum in 0:5) {
     
     ## extract and assign the raw single-cell count data for each individual ## 
     ind_list <- unique(sge_pbmc_NC$ID)
+    print(paste0(clusterNum,"_",treatment))
     
     #clusterNum <- 1
     cNumDouble <- paste0(floor(clusterNum/10),clusterNum %% 10)
@@ -148,13 +149,13 @@ for (clusterNum in 0:5) {
         naCount[r] <- sum(is.na(tmpOutput[r,]))
       }
       
-      tmpOutput <- tmpOutput[naCount != 45,]
+      tmpOutput <- tmpOutput[naCount != dim(tmpOutput)[2],]
       
       colnames(tmpOutput) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
       
       assign(value = tmpOutput, x = paste0("sge_",treatment,"_",cNumDouble,"_",metric,"_matrix"))
       
-      write.table(tmpOutput,file=paste0(workDir,paste0("sge_NC_c",cNumDouble,"_",metric,"_matrix")),row.names=T,col.names=T,quote=F,sep='\t')
+      write.table(tmpOutput,file=paste0(workDir,paste0("sge_",treatment,"_c",cNumDouble,"_",metric,"_matrix")),row.names=T,col.names=T,quote=F,sep='\t')
     }
     
   }
