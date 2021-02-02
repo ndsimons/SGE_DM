@@ -31,19 +31,46 @@ rm(sge_pbmc)
 
 #NC first
 #treatment <- "NC"
-for (clusterNum in 0:5) {
+for (clusterNum in 3:7) {
+  print(clusterNum)
+  cNumDouble <- paste0(floor(clusterNum/10),clusterNum %% 10)
+  
+  #first, get a list of individuals for use in both treatments
   
   for(treatment in c("NC","LPS")) {
     
-    ## extract and assign the raw single-cell count data for each individual ## 
-    ind_list <- unique(sge_pbmc_NC$ID)
+    cObj <- SubsetData(object = get(paste0("sge_pbmc_",treatment)), do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterNum)
+    
+    cMeta <- cObj@meta.data %>% as.data.table
+    
+    ind_list <- vector()
+    
+    #need more than 4 cells to make the cutoff
+    cellThresh <- 5
+    
+    for (c in unique(cMeta$ID)) {
+      if ( dim(cMeta[ID == c])[1] > (cellThresh - 1) ) {
+        ind_list <- c(ind_list, c)
+      }
+    }
+    
+    assign(value = ind_list, x = paste("ind_list_",treatment, sep=""))
+  }
+  
+  final_ind_list <- ind_list_NC[ind_list_NC %in% ind_list_LPS]
+  
+  
+  for(treatment in c("NC","LPS")) {
+    
     print(paste0(clusterNum,"_",treatment))
     
-    #clusterNum <- 1
-    cNumDouble <- paste0(floor(clusterNum/10),clusterNum %% 10)
-    
-    for (i in ind_list){
-      print(i)
+    for (i in final_ind_list){
+      #print(i)
+      
+      if ( i == "mo") {
+        i <- "77_06"
+      }
+      
       tmp <- subset(get(paste0("sge_pbmc_",treatment)), subset = ID == i)
       #pseudobulk straight from sge object
       obj <- SubsetData(object = tmp, do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterNum)
@@ -127,8 +154,8 @@ for (clusterNum in 0:5) {
     #rm(`77_06_NC_counts_DM`)
     
     #replace 77_06 in id_list
-    ind_listBAK <- ind_list
-    ind_list[which(ind_list == "77_06")] <- "mo"
+    final_ind_listBAK <- final_ind_list
+    final_ind_list[which(final_ind_list == "77_06")] <- "mo"
     
     ## for DM, mean, variance, and pbMeans - generate matrices of values containing all individuals, and remove genes with NAs ##
     #treatment <- "NC"
@@ -139,7 +166,7 @@ for (clusterNum in 0:5) {
       
       tmpOutput <- numeric()
       
-      for (j in ind_list) {
+      for (j in final_ind_list) {
         tmpOutput <- cbind(tmpOutput,as.matrix(get(paste0(j,"_",treatment,"_counts_c",cNumDouble,"_",metric))))
       }
       
@@ -151,7 +178,10 @@ for (clusterNum in 0:5) {
       
       tmpOutput <- tmpOutput[naCount != dim(tmpOutput)[2],]
       
-      colnames(tmpOutput) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
+      #colnames(tmpOutput) <- c("Ai10", "Az15", "Bi10", "Bm7", "Bw12", "Cg16", "Cl13", "Dj15", "DV2J", "Ed8",  "Et12", "Fw12", "Fy11", "Ga13", "Gl11", "Gq10", "Gu10", "Ht8",  "Ie6",  "Ik6", "JE11", "JVA",  "Kk13", "Lm8", "Lo9",  "Mg12", "mo",   "Nn10", "Ph7",  "Pt8",  "Pz13", "Qt8", "Qv5",  "Rn9",  "Rz6",  "Sd4", "Sm8",  "Ss10", "Ta11", "Tm13", "Tr13", "Vt12", "Wm14", "Yr14", "Yz6")
+      
+      colnames(tmpOutput) <- final_ind_list
+      
       
       assign(value = tmpOutput, x = paste0("sge_",treatment,"_",cNumDouble,"_",metric,"_matrix"))
       
