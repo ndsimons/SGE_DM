@@ -105,10 +105,7 @@ figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 
 ```{r}
 
-cluster <- "01"
-
-
-
+cluster <- "02"
 
 sge_LPS_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DM_matrix'))
 sge_LPS_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_mean_matrix'))
@@ -519,28 +516,87 @@ p1 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,1],sge_NC_DM_matrix[,1]
   #ylim(0,1000) +
   #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
-  xlab('DM - individual 1') +
-  ylab('DM from pbMean - individual 1') +
+  ylab('DM - individual 1') +
+  xlab('DM from pbMean - individual 1') +
   theme_minimal()
 p2 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,2],sge_NC_DM_matrix[,2])) +
   geom_point(alpha=0.5) +
   #ylim(0,1000) +
   #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
-  xlab('DM - individual 2') +
-  ylab('DM from pbMean - individual 2') +
+  ylab('DM - individual 2') +
+  xlab('DM from pbMean - individual 2') +
   theme_minimal()
 p3 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,3],sge_NC_DM_matrix[,3])) +
   geom_point(alpha=0.5) +
   #ylim(0,1000) +
   #xlim(0,50) +
   stat_smooth(method='lm', color='black', fullrange = T) +
-  xlab('DM - individual 3') +
-  ylab('DM from pbMean - individual 3') +
+  ylab('DM - individual 3') +
+  xlab('DM from pbMean - individual 3') +
   theme_minimal()
 
 plot_grid(p1,p2,p3, ncol = 3)
-ggsave(paste0(figDir,"var_v_pbMean_ge__by_individual_noLim_c",cluster,".png"))
+ggsave(paste0(figDir,"DMpb_v_DM_ge__by_individual_noLim_c",cluster,".png"))
+
+
+#var v DM
+p1 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,1],sge_NC_DM_matrix[,1])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  ylab('DM - individual 1') +
+  xlab('var - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,2],sge_NC_DM_matrix[,2])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  ylab('DM - individual 2') +
+  xlab('var - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,3],sge_NC_DM_matrix[,3])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  ylab('DM - individual 3') +
+  xlab('var - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"var_v_DM_ge__by_individual_noLim_c",cluster,".png"))
+
+#var v DM
+p1 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,1],sge_NC_DM_matrix[,1])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  xlim(0,250) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  ylab('DM - individual 1') +
+  xlab('var - individual 1') +
+  theme_minimal()
+p2 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,2],sge_NC_DM_matrix[,2])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  xlim(0,250) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  ylab('DM - individual 2') +
+  xlab('var - individual 2') +
+  theme_minimal()
+p3 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,3],sge_NC_DM_matrix[,3])) +
+  geom_point(alpha=0.5) +
+  #ylim(0,1000) +
+  xlim(0,250) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  ylab('DM - individual 3') +
+  xlab('var - individual 3') +
+  theme_minimal()
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"var_v_DM_ge__by_individual_xLim250_c",cluster,".png"))
 
 ```
 
@@ -768,11 +824,76 @@ plotModelHists(get(paste0("res_fullDF_var_c",cluster)), folderName = figDir, mod
 
 ```
 
+```{r}
+p1 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,1],resid_varMean[,1])) +
+  geom_point(alpha=0.5) +
+  #ylim(-500,500) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 1') +
+  ylab('variance Resid in gene expression - individual 1') +
+  theme_minimal() + scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) 2^x),
+    labels = trans_format("log2", math_format(2^.x)))
+p2 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,2],resid_varMean[,2])) +
+  geom_point(alpha=0.5) +
+  #ylim(-500,500) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 2') +
+  ylab('variance Resid in gene expression - individual 2') +
+  theme_minimal() + scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) 2^x),
+    labels = trans_format("log2", math_format(2^.x)))
+p3 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,3],resid_varMean[,3])) +
+  geom_point(alpha=0.5) +
+  #ylim(-500,500) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 3') +
+  ylab('variance Resid in gene expression - individual 3') +
+  theme_minimal() + scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) 2^x),
+    labels = trans_format("log2", math_format(2^.x)))
 
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"varResidmean_v_mean_ge__by_individual_c",cluster,".png"))
+
+p1 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,1],resid_varMean[,1])) +
+  geom_point(alpha=0.5) +
+  ylim(-500,500) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 1') +
+  ylab('variance Resid in gene expression - individual 1') +
+  theme_minimal() + scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) 2^x),
+    labels = trans_format("log2", math_format(2^.x)))
+p2 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,2],resid_varMean[,2])) +
+  geom_point(alpha=0.5) +
+  ylim(-500,500) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 2') +
+  ylab('variance Resid in gene expression - individual 2') +
+  theme_minimal() + scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) 2^x),
+    labels = trans_format("log2", math_format(2^.x)))
+p3 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,3],resid_varMean[,3])) +
+  geom_point(alpha=0.5) +
+  ylim(-500,500) +
+  #xlim(0,50) +
+  stat_smooth(method='lm', color='black', fullrange = T) +
+  xlab('mean gene expression - individual 3') +
+  ylab('variance Resid in gene expression - individual 3') +
+  theme_minimal() + scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) 2^x),
+    labels = trans_format("log2", math_format(2^.x)))
+
+plot_grid(p1,p2,p3, ncol = 3)
+ggsave(paste0(figDir,"varResidmean_v_mean_ge__by_individual_yLim500_c",cluster,".png"))
+```
+
+how do the variance and the DM models compare
 ```{r}
 
 res_fullvarDF <- get(paste0("res_fullDF_var_c",cluster))
 res_fullDF <- get(paste0("res_fullDFc",cluster))
+
 
 lpsEloR <- cor.test(res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
                     res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5)$estimate
@@ -887,4 +1008,147 @@ assign(value = data.frame(res_full), x = paste0("res_fullDF_pbMean_c",cluster))
 
 plotModelHists(get(paste0("res_fullDF_pbMean_c",cluster)), folderName = figDir, modelName = paste0("pbMean_model_c",cluster))
 ```
-compare outputs
+
+
+
+
+compare betas from the various models
+```{r}
+# 
+# res_fullDF_pbMean_c01plot <- res_fullDF_pbMean_c01
+# 
+# pbMeanSig <- qvalue(p = res_fullDF_pbMean_c01$p_value_trtNC, fdr.level = .0000001)$significant
+# sum(pbMeanSig)/length(pbMeanSig)
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+#                  y = res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5,
+#                  col = pbMeanSig),
+#              alpha = .1) +
+#   xlab("variance model - std betas LPS") +
+#   ylab("DM model - std betas LPS") +
+#   geom_smooth(aes(x = res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+#                  y = res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5), method = "lm") +
+#   geom_text(aes(x = .95 * min(res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5),
+#                 y = .95 * max(res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5)),
+#                 label = paste0("R = ",round(trtR, digits = 3)))
+# ggsave(paste0(figDir,"stdBeta_comp_Trt_DM_v_Var_pbMeanSigColor_c",cluster,".png"))
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+#                  y = res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5,
+#                  col = pbMeanSig),
+#              alpha = .1) +
+#   xlab("variance model - std betas LPS:elo") +
+#   ylab("DM model - std betas LPS:elo") +
+#   geom_smooth(aes(x = res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+#                  y = res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5), method = "lm") +
+#   geom_text(aes(x = .95 * min(res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5),
+#                 y = .95 * max(res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5)),
+#                 label = paste0("R = ",round(lpsEloR, digits = 3)))
+# ggsave(paste0(figDir,"stdBeta_comp_LPSelo_DM_v_Var_pbMeanSigColor_c",cluster,".png"))
+# 
+# #but what about direction
+# res_fullDF_pbMean_c01plot$geneCat <- ifelse(pbMeanSig, ifelse(res_fullDF_pbMean_c01plot$beta_trtNC > 0, "sigDown", "sigUp"),"ns")
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+#                  y = res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5,
+#                  col = res_fullDF_pbMean_c01plot$geneCat),
+#              alpha = .5) +
+#   xlab("variance model - std betas LPS") +
+#   ylab("DM model - std betas LPS") +
+#   geom_smooth(aes(x = res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5,
+#                  y = res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5), method = "lm") +
+#   geom_text(aes(x = .95 * min(res_fullvarDF$beta_trtNC / (res_fullvarDF$sdev_trtNC)^0.5),
+#                 y = .95 * max(res_fullDF$beta_trtNC / (res_fullDF$sdev_trtNC)^0.5)),
+#                 label = paste0("R = ",round(trtR, digits = 3))) +
+#   labs(col = "pbMeans\nSig and\nLPS dir")
+# ggsave(paste0(figDir,"stdBeta_comp_Trt_DM_v_Var_pbMeanUpDownColor_c",cluster,".png"))
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+#                  y = res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5,
+#                  col = res_fullDF_pbMean_c01plot$geneCat),
+#              alpha = .1) +
+#   xlab("variance model - std betas LPS:elo") +
+#   ylab("DM model - std betas LPS:elo") +
+#   geom_smooth(aes(x = res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5,
+#                  y = res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5), method = "lm") +
+#   geom_text(aes(x = .95 * min(res_fullvarDF$beta_trtLPS.elo_centered / (res_fullvarDF$sdev_trtLPS.elo_centered)^0.5),
+#                 y = .95 * max(res_fullDF$beta_trtLPS.elo_centered / (res_fullDF$sdev_trtLPS.elo_centered)^0.5)),
+#                 label = paste0("R = ",round(lpsEloR, digits = 3))) +
+#   labs(col = "pbMeans\nSig and\nLPS dir")
+# ggsave(paste0(figDir,"stdBeta_comp_LPSelo_DM_v_Var_pbMeanUpDownColor_c",cluster,".png"))
+# 
+# 
+# 
+# #what if i only plot the significant genes in DM
+# res_fullvarDFsig <- res_fullvarDF[qvalue(p = res_fullDF$p_value_trtNC, fdr.level = .1)$significant,]
+# res_fullDFsig <- res_fullDF[qvalue(p = res_fullDF$p_value_trtNC, fdr.level = .1)$significant,]
+# res_fullDF_pbMean_c01plotSIG <- res_fullDF_pbMean_c01plot[qvalue(p = res_fullDF$p_value_trtNC, fdr.level = .1)$significant,]
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullvarDFsig$beta_trtNC / (res_fullvarDFsig$sdev_trtNC)^0.5,
+#                  y = res_fullDFsig$beta_trtNC / (res_fullDFsig$sdev_trtNC)^0.5,
+#                  col = res_fullDF_pbMean_c01plotSIG$geneCat),
+#              alpha = .5) +
+#   xlab("variance model - std betas LPS") +
+#   ylab("DM model - std betas LPS") +
+#   labs(col = "pbMeans\nSig and\nLPS dir")
+# ggsave(paste0(figDir,"stdBeta_comp_Trt_DM_v_Var_pbMeanUpDownColor_sigDM_c",cluster,".png"))
+# 
+# 
+# #what if i only plot the significant genes in Var
+# res_fullvarDFsig <- res_fullvarDF[qvalue(p = res_fullvarDF$p_value_trtNC, fdr.level = .1)$significant,]
+# res_fullDFsig <- res_fullDF[qvalue(p = res_fullvarDF$p_value_trtNC, fdr.level = .1)$significant,]
+# res_fullDF_pbMean_c01plotSIG <- res_fullDF_pbMean_c01plot[qvalue(p = res_fullvarDF$p_value_trtNC, fdr.level = .1)$significant,]
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullvarDFsig$beta_trtNC / (res_fullvarDFsig$sdev_trtNC)^0.5,
+#                  y = res_fullDFsig$beta_trtNC / (res_fullDFsig$sdev_trtNC)^0.5,
+#                  col = res_fullDF_pbMean_c01plotSIG$geneCat),
+#              alpha = .5) +
+#   xlab("variance model - std betas LPS") +
+#   ylab("DM model - std betas LPS") +
+#   labs(col = "pbMeans\nSig and\nLPS dir")
+# ggsave(paste0(figDir,"stdBeta_comp_Trt_DM_v_Var_pbMeanUpDownColor_sigVar_c",cluster,".png"))
+# 
+# 
+# 
+# lpsMeanVarR <- cor.test(res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5,
+#                     res_fullDF_var_c01$beta_trtNC / (res_fullDF_var_c01$sdev_trtNC)^0.5)$estimate
+# 
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5,
+#                  y = res_fullDF_var_c01$beta_trtNC / (res_fullDF_var_c01$sdev_trtNC)^0.5),
+#              alpha = .1) +
+#   xlab("pbMean LPS std beta") +
+#   ylab("var LPS std beta") +
+#   geom_smooth(aes(x = res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5,
+#                  y = res_fullDF_var_c01$beta_trtNC / (res_fullDF_var_c01$sdev_trtNC)^0.5), method = "lm") +
+#   geom_text(aes(x = .95 * min(res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5),
+#                 y = .95 * max(res_fullDF_var_c01$beta_trtNC / (res_fullDF_var_c01$sdev_trtNC)^0.5)),
+#                 label = paste0("R = ",round(lpsMeanVarR, digits = 3)))
+# 
+# ggsave(paste0(figDir,"stdBeta_comp_Trt-var_v_Trt-pbMean_c",cluster,".png"))
+# 
+# lpsMeanDMR <- cor.test(res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5,
+#                     res_fullDFc01$beta_trtNC / (res_fullDFc01$sdev_trtNC)^0.5)$estimate
+# 
+# ggplot() +
+#   geom_point(aes(x = res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5,
+#                  y = res_fullDFc01$beta_trtNC / (res_fullDFc01$sdev_trtNC)^0.5),
+#              alpha = .1) +
+#   xlab("pbMean LPS std beta") +
+#   ylab("DM LPS std beta") +
+#   geom_smooth(aes(x = res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5,
+#                  y = res_fullDFc01$beta_trtNC / (res_fullDFc01$sdev_trtNC)^0.5), method = "lm") +
+#   geom_text(aes(x = .95 * min(res_fullDF_pbMean_c01$beta_trtNC / (res_fullDF_pbMean_c01$sdev_trtNC)^0.5),
+#                 y = .95 * max(res_fullDFc01$beta_trtNC / (res_fullDFc01$sdev_trtNC)^0.5)),
+#                 label = paste0("R = ",round(lpsMeanDMR, digits = 3)))
+# ggsave(paste0(figDir,"stdBeta_comp_Trt-DM_v_Trt-pbMean_c",cluster,".png"))
+
+```
+
