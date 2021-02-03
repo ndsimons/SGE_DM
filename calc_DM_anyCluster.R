@@ -31,7 +31,7 @@ rm(sge_pbmc)
 
 #NC first
 #treatment <- "NC"
-for (clusterNum in 3:7) {
+for (clusterNum in 0:10) {
   print(clusterNum)
   cNumDouble <- paste0(floor(clusterNum/10),clusterNum %% 10)
   
@@ -122,40 +122,46 @@ for (clusterNum in 3:7) {
     }
     
     ## R doesn't like objects starting with numbers so just rename 77_06 to mo for the three objects ##
-    i <- "77_06"
-    #mo_NC_counts_DM <- `77_06_NC_counts_DM`
-    assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_DM", sep="")), 
-           x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_DM", sep=""))
-    #rm(`77_06_NC_counts_DM`)
     
-    #mo_NC_counts_mean <- `77_06_NC_counts_mean`
-    assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_mean", sep="")), 
-           x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_mean", sep=""))
-    #rm(`77_06_NC_counts_mean`)
+    # CHECK FOR mo FIRST
     
-    #mo_NC_counts_var <- `77_06_NC_counts_var`
-    assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_var", sep="")), 
-           x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_var", sep=""))
-    #rm(`77_06_NC_counts_var`)
-    
-    #mo_NC_counts_pbMean <- `77_06_NC_counts_pbMean`
-    assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_DMpb", sep="")), 
-           x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_DMpb", sep=""))
-    #rm(`77_06_NC_counts_pbMean`)
-    
-    #mo_NC_counts_pbMean <- `77_06_NC_counts_pbMean`
-    assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_pbMean", sep="")), 
-           x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_pbMean", sep=""))
-    #rm(`77_06_NC_counts_pbMean`)
-    
-    #mo_NC_counts <- `77_06_NC_counts`
-    assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble, sep="")), 
-           x = paste("mo","_",treatment,"_counts_c",cNumDouble, sep=""))
-    #rm(`77_06_NC_counts_DM`)
-    
-    #replace 77_06 in id_list
-    final_ind_listBAK <- final_ind_list
-    final_ind_list[which(final_ind_list == "77_06")] <- "mo"
+    if ("mo" %in% final_ind_list) {
+        
+      i <- "77_06"
+      #mo_NC_counts_DM <- `77_06_NC_counts_DM`
+      assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_DM", sep="")), 
+             x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_DM", sep=""))
+      #rm(`77_06_NC_counts_DM`)
+      
+      #mo_NC_counts_mean <- `77_06_NC_counts_mean`
+      assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_mean", sep="")), 
+             x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_mean", sep=""))
+      #rm(`77_06_NC_counts_mean`)
+      
+      #mo_NC_counts_var <- `77_06_NC_counts_var`
+      assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_var", sep="")), 
+             x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_var", sep=""))
+      #rm(`77_06_NC_counts_var`)
+      
+      #mo_NC_counts_pbMean <- `77_06_NC_counts_pbMean`
+      assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_DMpb", sep="")), 
+             x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_DMpb", sep=""))
+      #rm(`77_06_NC_counts_pbMean`)
+      
+      #mo_NC_counts_pbMean <- `77_06_NC_counts_pbMean`
+      assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble,"_pbMean", sep="")), 
+             x = paste("mo","_",treatment,"_counts_c",cNumDouble,"_pbMean", sep=""))
+      #rm(`77_06_NC_counts_pbMean`)
+      
+      #mo_NC_counts <- `77_06_NC_counts`
+      assign(value = get(paste(i,"_",treatment,"_counts_c",cNumDouble, sep="")), 
+             x = paste("mo","_",treatment,"_counts_c",cNumDouble, sep=""))
+      #rm(`77_06_NC_counts_DM`)
+      
+      #replace 77_06 in id_list
+      final_ind_listBAK <- final_ind_list
+      final_ind_list[which(final_ind_list == "77_06")] <- "mo"
+    }
     
     ## for DM, mean, variance, and pbMeans - generate matrices of values containing all individuals, and remove genes with NAs ##
     #treatment <- "NC"

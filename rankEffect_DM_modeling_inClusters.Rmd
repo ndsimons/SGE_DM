@@ -105,7 +105,7 @@ figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 
 ```{r}
 
-cluster <- "02"
+cluster <- "08"
 
 sge_LPS_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DM_matrix'))
 sge_LPS_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_mean_matrix'))
@@ -158,18 +158,34 @@ geneList <- rownames(table(c(rownames(sge_NC_DM_matrix),
 
 geneList <- geneList[geneList != "chrMT"]
 
-## subset mean and variance data frames to include only the genes present in the DM data frame ##
-sge_NC_DM_matrix <- subset(sge_NC_DM_matrix, rownames(sge_NC_DM_matrix) %in% geneList)
-sge_NC_pbMean_matrix <- subset(sge_NC_pbMean_matrix, rownames(sge_NC_pbMean_matrix) %in% geneList)
-sge_NC_var_matrix <- subset(sge_NC_var_matrix, rownames(sge_NC_var_matrix) %in% geneList)
-sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% geneList)
-sge_NC_DMpb_matrix <- subset(sge_NC_DMpb_matrix, rownames(sge_NC_DMpb_matrix) %in% geneList)
 
-sge_LPS_DM_matrix <- subset(sge_LPS_DM_matrix, rownames(sge_LPS_DM_matrix) %in% geneList)
-sge_LPS_mean_matrix <- subset(sge_LPS_mean_matrix, rownames(sge_LPS_mean_matrix) %in% geneList)
-sge_LPS_var_matrix <- subset(sge_LPS_var_matrix, rownames(sge_LPS_var_matrix) %in% geneList)
-sge_LPS_pbMean_matrix <- subset(sge_LPS_pbMean_matrix, rownames(sge_LPS_pbMean_matrix) %in% geneList)
-sge_LPS_DMpb_matrix <- subset(sge_LPS_DMpb_matrix, rownames(sge_LPS_DMpb_matrix) %in% geneList)
+# sge_NC_DM_matrix <- subset(sge_NC_DM_matrix, rownames(sge_NC_DM_matrix) %in% geneList)
+# sge_NC_pbMean_matrix <- subset(sge_NC_pbMean_matrix, rownames(sge_NC_pbMean_matrix) %in% geneList)
+# sge_NC_var_matrix <- subset(sge_NC_var_matrix, rownames(sge_NC_var_matrix) %in% geneList)
+# sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% geneList)
+# sge_NC_DMpb_matrix <- subset(sge_NC_DMpb_matrix, rownames(sge_NC_DMpb_matrix) %in% geneList)
+# 
+# sge_LPS_DM_matrix <- subset(sge_LPS_DM_matrix, rownames(sge_LPS_DM_matrix) %in% geneList)
+# sge_LPS_mean_matrix <- subset(sge_LPS_mean_matrix, rownames(sge_LPS_mean_matrix) %in% geneList)
+# sge_LPS_var_matrix <- subset(sge_LPS_var_matrix, rownames(sge_LPS_var_matrix) %in% geneList)
+# sge_LPS_pbMean_matrix <- subset(sge_LPS_pbMean_matrix, rownames(sge_LPS_pbMean_matrix) %in% geneList)
+# sge_LPS_DMpb_matrix <- subset(sge_LPS_DMpb_matrix, rownames(sge_LPS_DMpb_matrix) %in% geneList)
+
+
+#for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+
+for (fObj in apropos("^sge_[NL][CP]")) {
+  tmpObj <- get(fObj)
+  ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+  tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+  
+  ## fix MO - 77_06 ID
+  if (sum(colnames(tmpObj) == "X77_06") > 0) {
+    colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    assign(x = fObj, value = tmpObj)
+  }
+}
+
 
 ## generate a dataframe of NC and LPS combined ##
 sge_DM_matrix_nested <- merge(sge_NC_DM_matrix,sge_LPS_DM_matrix, by=0)
@@ -190,7 +206,10 @@ sge_var_matrix_nested <- merge(sge_NC_var_matrix,sge_LPS_var_matrix, by=0)
 rownames(sge_var_matrix_nested) <- sge_var_matrix_nested$Row.names
 sge_var_matrix_nested$Row.names <- NULL
 
+indIDs <- colnames(sge_NC_DM_matrix)
 ```
+
+pick metadata based on samples in the matrix
 
 ```{r metadata and take residuals}
 ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
