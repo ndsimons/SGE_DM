@@ -98,132 +98,156 @@ library(snakecase)
 library(stringr)
 library(qvalue)
 library(scales)
+library(reshape2)
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 ```
 
 
-```{r}
+```{r loop through clusters to test variance and DM}
+#c("00","01","02","03","04","05","06","07","08","09","10")
 
-cluster <- "08"
-
-sge_LPS_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DM_matrix'))
-sge_LPS_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_mean_matrix'))
-sge_LPS_var_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_var_matrix'))
-sge_LPS_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_pbMean_matrix'))
-sge_LPS_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DMpb_matrix'))
-
-sge_NC_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DM_matrix'))
-sge_NC_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_mean_matrix'))
-sge_NC_var_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_var_matrix'))
-sge_NC_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_pbMean_matrix'))
-sge_NC_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DMpb_matrix'))
-
-## remove genes w/NAas DM values for any individuals, from NC & LPS DM
-
-numberNAs <- vector()
-
-for (r in 1:dim(sge_NC_DM_matrix)[1]) {
-  numberNAs[r] <- sum(is.na(sge_NC_DM_matrix[r,]))
-}
-sge_NC_DM_matrix <- sge_NC_DM_matrix[numberNAs < 1,]
-
-numberNAs <- vector()
-for (r in 1:dim(sge_LPS_DM_matrix)[1]) {
-  numberNAs[r] <- sum(is.na(sge_LPS_DM_matrix[r,]))
-}
-sge_LPS_DM_matrix <- sge_LPS_DM_matrix[numberNAs < 1,]
-
-
-## only use common set of genes - must exist in all matrices (8)
-geneList <- rownames(table(c(rownames(sge_NC_DM_matrix),
-            rownames(sge_NC_var_matrix),
-            rownames(sge_NC_mean_matrix),
-            rownames(sge_NC_pbMean_matrix),
-            rownames(sge_NC_DMpb_matrix),
-            rownames(sge_LPS_DM_matrix),
-            rownames(sge_LPS_var_matrix),
-            rownames(sge_LPS_mean_matrix),
-            rownames(sge_LPS_pbMean_matrix),
-            rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_DM_matrix),
-            rownames(sge_NC_var_matrix),
-            rownames(sge_NC_mean_matrix),
-            rownames(sge_NC_pbMean_matrix),
-            rownames(sge_NC_DMpb_matrix),
-            rownames(sge_LPS_DM_matrix),
-            rownames(sge_LPS_var_matrix),
-            rownames(sge_LPS_mean_matrix),
-            rownames(sge_LPS_pbMean_matrix),
-            rownames(sge_LPS_DMpb_matrix))) == 10]
-
-geneList <- geneList[geneList != "chrMT"]
-
-
-# sge_NC_DM_matrix <- subset(sge_NC_DM_matrix, rownames(sge_NC_DM_matrix) %in% geneList)
-# sge_NC_pbMean_matrix <- subset(sge_NC_pbMean_matrix, rownames(sge_NC_pbMean_matrix) %in% geneList)
-# sge_NC_var_matrix <- subset(sge_NC_var_matrix, rownames(sge_NC_var_matrix) %in% geneList)
-# sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% geneList)
-# sge_NC_DMpb_matrix <- subset(sge_NC_DMpb_matrix, rownames(sge_NC_DMpb_matrix) %in% geneList)
-# 
-# sge_LPS_DM_matrix <- subset(sge_LPS_DM_matrix, rownames(sge_LPS_DM_matrix) %in% geneList)
-# sge_LPS_mean_matrix <- subset(sge_LPS_mean_matrix, rownames(sge_LPS_mean_matrix) %in% geneList)
-# sge_LPS_var_matrix <- subset(sge_LPS_var_matrix, rownames(sge_LPS_var_matrix) %in% geneList)
-# sge_LPS_pbMean_matrix <- subset(sge_LPS_pbMean_matrix, rownames(sge_LPS_pbMean_matrix) %in% geneList)
-# sge_LPS_DMpb_matrix <- subset(sge_LPS_DMpb_matrix, rownames(sge_LPS_DMpb_matrix) %in% geneList)
-
-
-#for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
-
-for (fObj in apropos("^sge_[NL][CP]")) {
-  tmpObj <- get(fObj)
-  ## subset mean and variance data frames to include only the genes present in the DM data frame ##
-  tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+for (cluster in c("00","01","02","03","04","05","06","07","08","09","10")) {
+  #cluster <- "01"
   
-  ## fix MO - 77_06 ID
-  if (sum(colnames(tmpObj) == "X77_06") > 0) {
-    colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+  #cluster,geneList
+  #00,6251
+  #01,7359
+  #02,2907
+  #03,749
+  #04,2541
+  
+  
+  sge_LPS_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DM_matrix'))
+  sge_LPS_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_mean_matrix'))
+  sge_LPS_var_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_var_matrix'))
+  sge_LPS_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_pbMean_matrix'))
+  sge_LPS_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DMpb_matrix'))
+  
+  sge_NC_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DM_matrix'))
+  sge_NC_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_mean_matrix'))
+  sge_NC_var_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_var_matrix'))
+  sge_NC_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_pbMean_matrix'))
+  sge_NC_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DMpb_matrix'))
+  
+  ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
+  
+  numberNAs <- vector()
+  
+  for (r in 1:dim(sge_NC_DM_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_NC_DM_matrix[r,]))
+  }
+  sge_NC_DM_matrix <- sge_NC_DM_matrix[numberNAs < 1,]
+  
+  numberNAs <- vector()
+  for (r in 1:dim(sge_LPS_DM_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_LPS_DM_matrix[r,]))
+  }
+  sge_LPS_DM_matrix <- sge_LPS_DM_matrix[numberNAs < 1,]
+  
+  
+  ## only use common set of genes - must exist in all matrices (8)
+  geneList <- rownames(table(c(rownames(sge_NC_DM_matrix),
+              rownames(sge_NC_var_matrix),
+              rownames(sge_NC_mean_matrix),
+              rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_DM_matrix),
+              rownames(sge_LPS_var_matrix),
+              rownames(sge_LPS_mean_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_DM_matrix),
+              rownames(sge_NC_var_matrix),
+              rownames(sge_NC_mean_matrix),
+              rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_DM_matrix),
+              rownames(sge_LPS_var_matrix),
+              rownames(sge_LPS_mean_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))) == 10]
+  
+  geneList <- geneList[geneList != "chrMT"]
+  
+  
+  # sge_NC_DM_matrix <- subset(sge_NC_DM_matrix, rownames(sge_NC_DM_matrix) %in% geneList)
+  # sge_NC_pbMean_matrix <- subset(sge_NC_pbMean_matrix, rownames(sge_NC_pbMean_matrix) %in% geneList)
+  # sge_NC_var_matrix <- subset(sge_NC_var_matrix, rownames(sge_NC_var_matrix) %in% geneList)
+  # sge_NC_mean_matrix <- subset(sge_NC_mean_matrix, rownames(sge_NC_mean_matrix) %in% geneList)
+  # sge_NC_DMpb_matrix <- subset(sge_NC_DMpb_matrix, rownames(sge_NC_DMpb_matrix) %in% geneList)
+  # 
+  # sge_LPS_DM_matrix <- subset(sge_LPS_DM_matrix, rownames(sge_LPS_DM_matrix) %in% geneList)
+  # sge_LPS_mean_matrix <- subset(sge_LPS_mean_matrix, rownames(sge_LPS_mean_matrix) %in% geneList)
+  # sge_LPS_var_matrix <- subset(sge_LPS_var_matrix, rownames(sge_LPS_var_matrix) %in% geneList)
+  # sge_LPS_pbMean_matrix <- subset(sge_LPS_pbMean_matrix, rownames(sge_LPS_pbMean_matrix) %in% geneList)
+  # sge_LPS_DMpb_matrix <- subset(sge_LPS_DMpb_matrix, rownames(sge_LPS_DMpb_matrix) %in% geneList)
+  
+  
+  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+  
+  for (fObj in apropos("^sge_[NL][CP]")) {
+    tmpObj <- get(fObj)
+    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+    
+    ## fix MO - 77_06 ID
+    if (sum(colnames(tmpObj) == "X77_06") > 0) {
+      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    }
+    #sort the columns by ID to match metadata
+    tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    
+    #reassign the temp object to the sge_NC, etc
     assign(x = fObj, value = tmpObj)
   }
-}
+  
+  
+  ## generate a dataframe of NC and LPS combined ##
+  sge_DM_matrix_nested <- merge(sge_NC_DM_matrix,sge_LPS_DM_matrix, by=0)
+  rownames(sge_DM_matrix_nested) <- sge_DM_matrix_nested$Row.names
+  sge_DM_matrix_nested$Row.names <- NULL
+  
+  #one for pbMeans as well
+  sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+  rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+  sge_pbMean_matrix_nested$Row.names <- NULL
+  
+  #and raw means and variances to use in the variance model
+  sge_mean_matrix_nested <- merge(sge_NC_mean_matrix,sge_LPS_mean_matrix, by=0)
+  rownames(sge_mean_matrix_nested) <- sge_mean_matrix_nested$Row.names
+  sge_mean_matrix_nested$Row.names <- NULL
+  
+  sge_var_matrix_nested <- merge(sge_NC_var_matrix,sge_LPS_var_matrix, by=0)
+  rownames(sge_var_matrix_nested) <- sge_var_matrix_nested$Row.names
+  sge_var_matrix_nested$Row.names <- NULL
+  
+  sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
+  rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
+  sge_DMpb_matrix_nested$Row.names <- NULL
+  
+  
+  indIDs <- colnames(sge_NC_DM_matrix)
 
 
-## generate a dataframe of NC and LPS combined ##
-sge_DM_matrix_nested <- merge(sge_NC_DM_matrix,sge_LPS_DM_matrix, by=0)
-rownames(sge_DM_matrix_nested) <- sge_DM_matrix_nested$Row.names
-sge_DM_matrix_nested$Row.names <- NULL
 
-#one for pbMeans as well
-sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
-rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
-sge_pbMean_matrix_nested$Row.names <- NULL
 
-#and raw means and variances to use in the variance model
-sge_mean_matrix_nested <- merge(sge_NC_mean_matrix,sge_LPS_mean_matrix, by=0)
-rownames(sge_mean_matrix_nested) <- sge_mean_matrix_nested$Row.names
-sge_mean_matrix_nested$Row.names <- NULL
+#pick metadata based on samples in the matrix
 
-sge_var_matrix_nested <- merge(sge_NC_var_matrix,sge_LPS_var_matrix, by=0)
-rownames(sge_var_matrix_nested) <- sge_var_matrix_nested$Row.names
-sge_var_matrix_nested$Row.names <- NULL
 
-indIDs <- colnames(sge_NC_DM_matrix)
-```
-
-pick metadata based on samples in the matrix
-
-```{r metadata and take residuals}
 ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
 ## get some metadata ##
 metadata <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_metadata_matrix', header = T) # this files is also in SGE_DM/dataFiles
 metadata[1,1] <- 'Mo'
 metadata <- metadata[order(metadata$ID),]
 
+metadata <- metadata[metadata$ID %in% indIDs,]
+
 ## make sure metadata order matches data frames ##
 all.equal(metadata$ID,colnames(sge_NC_DM_matrix))
 
 ## double the metadata so it includes both NC and LPS ##
 metadata <- rbind(metadata,metadata)
-metadata$trt <- rep(c('NC','LPS'), times=c(45,45))
+metadata$trt <- rep(c('NC','LPS'), times=c(length(indIDs),length(indIDs)))
 
 ## run a nested model with trt, and age and elo nested within trt ##
 ## elo and age have to be mean centered for nested model ##
@@ -261,14 +285,20 @@ fit <-lmFit(sge_DM_matrix_nested,design)
 intercepts=data.frame(eBayes(fit))[,1]
 resid_DM=apply(residuals.MArrayLM(object=fit, sge_DM_matrix_nested),2,function(x){x+intercepts})
 
+## regress out group effects from DMpb ##
+design <- model.matrix(~metadata$group)
+fit <-lmFit(sge_DMpb_matrix_nested,design)
+intercepts=data.frame(eBayes(fit))[,1]
+resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
+
 ## regress out group effects from pbMean ##
 design <- model.matrix(~metadata$group)
 fit <-lmFit(sge_pbMean_matrix_nested,design)
 intercepts=data.frame(eBayes(fit))[,1]
 resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
-```
 
-```{r qc plots}
+
+###### qc plots
 p1 <- ggplot(sge_NC_mean_matrix, aes(sge_NC_mean_matrix[,1],sge_NC_var_matrix[,1])) +
   geom_point(alpha=0.5) +
   #ylim(0,1000) +
@@ -617,11 +647,8 @@ p3 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,3],sge_NC_DM_matrix[,3]))
 plot_grid(p1,p2,p3, ncol = 3)
 ggsave(paste0(figDir,"var_v_DM_ge__by_individual_xLim250_c",cluster,".png"))
 
-```
+###### Fit an elo model for each gene using emmreml
 
-
-Fit an elo model for each gene using emmreml
-```{r}
 design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
 
 #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
@@ -631,8 +658,8 @@ colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(de
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_DM[,1:45]
-colnames(random_effects)=metadata[1:45,'ID']
+random_effects=resid_DM[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
@@ -661,11 +688,52 @@ for(i in 1:nrow(resid_DM))
 assign(value = data.frame(res_full), x = paste0("res_fullDFc",cluster))
 
 plotModelHists(get(paste0("res_fullDFc",cluster)), folderName = figDir, modelName = paste0("DM_model_c",cluster))
-```
 
-Now the other behavioral metrics
-agAsymm | AgRec | Groom
-```{r}
+###### Fit an elo model for each gene using emmreml to DM pseudobulk
+
+design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
+
+#Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+res_full=resid_DMpb[,1:(3*ncol(design))]
+colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+
+#Declare object random_effects to store in it the individual-wise u random effects
+random_effects=resid_DMpb[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
+
+#Define matrix Z describing the sample-to-individual mapping
+K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+# correcting capitalization so it matches
+rownames(K)[34] <- 'JE11'
+colnames(K)[34] <- 'JE11'
+K=K[unique(metadata$ID),unique(metadata$ID)]
+
+Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+rownames(Z)=metadata$ID
+colnames(Z)=colnames(K)
+for(i in 1:ncol(Z)){
+  set=which(metadata$ID == colnames(Z)[i])
+  Z[set,i]=1
+}
+
+
+
+for(i in 1:nrow(resid_DMpb))
+{
+  emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+  random_effects[i,]=t(emma$uhat)
+  res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+}
+
+assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
+
+plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = figDir, modelName = paste0("DMpb_model_c",cluster))
+
+######Now the other behavioral metrics
+######agAsymm | AgRec | Groom
+
 #Agonism Asymmetry
 design = model.matrix(~trt+trt:aggAsymm_cent + trt:age_centered, data=metadata)
 
@@ -676,8 +744,8 @@ colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(de
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_DM[,1:45]
-colnames(random_effects)=metadata[1:45,'ID']
+random_effects=resid_DM[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
@@ -716,8 +784,8 @@ colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(de
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_DM[,1:45]
-colnames(random_effects)=metadata[1:45,'ID']
+random_effects=resid_DM[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
@@ -755,8 +823,8 @@ colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(de
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_DM[,1:45]
-colnames(random_effects)=metadata[1:45,'ID']
+random_effects=resid_DM[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
@@ -783,12 +851,9 @@ for(i in 1:nrow(resid_DM))
 assign(value = data.frame(res_full), x = paste0("res_full_groomDF_c",cluster))
 plotModelHists(get(paste0("res_full_groomDF_c",cluster)), folderName = figDir, modelName = paste0("DM_model_groom_c",cluster))
 
-```
+######data QC - how do significant genes from the betas of var (control for mean) model compare to DM?
+######did fixing the DM values to 0 alter that?
 
-data QC - how do significant genes from the betas of var (control for mean) model compare to DM?
-did fixing the DM values to 0 alter that?
-
-```{r model variance controlling for mean}
 ## Here I'm doing some modeling to ask what are the effects of treatment and rank on variance ##
 ## get some metadata ##
 
@@ -812,8 +877,8 @@ colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(de
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_varMean[,1:45]
-colnames(random_effects)=metadata[1:45,'ID']
+random_effects=resid_varMean[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
@@ -841,9 +906,7 @@ for(i in 1:nrow(resid_varMean))
 assign(value = data.frame(res_full), x = paste0("res_fullDF_var_c",cluster))
 plotModelHists(get(paste0("res_fullDF_var_c",cluster)), folderName = figDir, modelName = paste0("Var_model_c",cluster))
 
-```
 
-```{r}
 p1 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,1],resid_varMean[,1])) +
   geom_point(alpha=0.5) +
   #ylim(-500,500) +
@@ -905,10 +968,9 @@ p3 <- ggplot(sge_mean_matrix_nested, aes(sge_mean_matrix_nested[,3],resid_varMea
 
 plot_grid(p1,p2,p3, ncol = 3)
 ggsave(paste0(figDir,"varResidmean_v_mean_ge__by_individual_yLim500_c",cluster,".png"))
-```
 
-how do the variance and the DM models compare
-```{r}
+
+######how do the variance and the DM models compare
 
 res_fullvarDF <- get(paste0("res_fullDF_var_c",cluster))
 res_fullDF <- get(paste0("res_fullDFc",cluster))
@@ -978,15 +1040,16 @@ ggplot() +
                 label = "DM Model"), col = "blue")
 
 ggsave(paste0(figDir,"stdBeta_hist_Trt_DM_and_Var__sigOnly_c",cluster,".png"))
-```
 
 
 
-data validation possibilities
-are genes that are upregulated in LPS also higher variance in LPS?
--need to make an elo model but use pbMean instead of DM
-Fit an elo model for each gene using emmreml
-```{r}
+
+######data validation possibilities
+######are genes that are upregulated in LPS also higher variance in LPS?
+######-need to make an elo model but use pbMean instead of DM
+######Fit an elo model for each gene using emmreml
+
+
 design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
 
 #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
@@ -996,8 +1059,8 @@ colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(de
 colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
 
 #Declare object random_effects to store in it the individual-wise u random effects
-random_effects=resid_pbMean[,1:45]
-colnames(random_effects)=metadata[1:45,'ID']
+random_effects=resid_pbMean[,1:length(indIDs)]
+colnames(random_effects)=metadata[1:length(indIDs),'ID']
 
 #Define matrix Z describing the sample-to-individual mapping
 K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
@@ -1026,6 +1089,9 @@ for(i in 1:nrow(resid_pbMean))
 assign(value = data.frame(res_full), x = paste0("res_fullDF_pbMean_c",cluster))
 
 plotModelHists(get(paste0("res_fullDF_pbMean_c",cluster)), folderName = figDir, modelName = paste0("pbMean_model_c",cluster))
+
+}
+
 ```
 
 
@@ -1168,6 +1234,276 @@ compare betas from the various models
 #                 y = .95 * max(res_fullDFc01$beta_trtNC / (res_fullDFc01$sdev_trtNC)^0.5)),
 #                 label = paste0("R = ",round(lpsMeanDMR, digits = 3)))
 # ggsave(paste0(figDir,"stdBeta_comp_Trt-DM_v_Trt-pbMean_c",cluster,".png"))
+
+```
+
+how does cluster size affect gene counts
+```{r cluster size and gene list}
+scRNAmetaData <- read.table("~/Dropbox (Personal)/scRNA/SGE_DM/data/pseudobulk_info.txt", sep = ",", header = TRUE)
+
+#
+
+dmMetaData <- data.frame(c("00","01","02","03","04","05","06","07","08","09","10"))
+
+colnames(dmMetaData) <- "clusterID"
+
+dmMetaData$nGenes <- c(6251,7359,2907,749,2541,5416,1214,1266,390,1350,2074)
+
+dmMetaData$nInds <- c(45,45,45,31,45,45,41,43,44,26,20)
+
+dmMetaData$nCells <- as.vector(colSums(scRNAmetaData[,5:15]))
+
+ggplot(dmMetaData, aes(x = nCells, y = nGenes)) +
+  geom_point() +
+  geom_text(aes(label = clusterID), nudge_x = 1000) +
+  xlab("Number of Cells in scRNA cluster") +
+  ylab("Number of Genes with non-NA DM for all Individuals")
+ggsave(paste0(figDir,"genes_v_clusterCells.png"))
+
+ggplot(dmMetaData, aes(x = nCells, y = nInds)) +
+  geom_point() +
+  ylim(c(0,45)) +
+  geom_text(aes(label = clusterID), nudge_y = -2) +
+  xlab("Number of Cells in scRNA cluster") +
+  ylab("Number of Individuals with 5 or more Cells")
+ggsave(paste0(figDir,"individuals_v_clusterCells.png"))
+```
+
+
+```{r correlations between mean and DM}
+## just take a quick look at some stuff ##
+meanVarRs <- meanDMRs <- pbMeanVarRs <- pbMeanDMRs <- vector()
+
+for (i in 1:45){
+  meanVarRs[[i]] <- cor.test(sge_NC_mean_matrix[,i],sge_NC_var_matrix[,i], method = "spearman")$estimate 
+}
+
+for (i in 1:45){
+  meanDMRs[[i]] <- cor.test(sge_NC_mean_matrix[,i],sge_NC_DM_matrix[,i], method = "spearman")$estimate 
+}
+
+for (i in 1:45){
+  pbMeanVarRs[[i]] <- cor.test(sge_NC_pbMean_matrix[,i],sge_NC_var_matrix[,i], method = "spearman")$estimate 
+}
+
+for (i in 1:45){
+  pbMeanDMRs[[i]] <- cor.test(sge_NC_pbMean_matrix[,i],sge_NC_DM_matrix[,i], method = "spearman")$estimate 
+}
+
+
+ggplot() +
+  geom_density(aes(meanVarRs, fill = 'mean/variance')) +
+  geom_density(aes(meanDMRs, fill = 'mean/DM')) +
+  #xlim(-0.01,1) +
+  xlab('R') +
+  scale_fill_discrete(name = "")
+ggsave(paste0(figDir,"hist_mean_dm_and_var_Rvalues_c",cluster,"_spearman.png"))
+
+ggplot() +
+  geom_density(aes(pbMeanVarRs, fill = 'pbMean/variance')) +
+  geom_density(aes(pbMeanDMRs, fill = 'pbMean/DM')) +
+  #xlim(-0.01,1) +
+  xlab('R') +
+  scale_fill_discrete(name = "")
+ggsave(paste0(figDir,"hist_pbMean_dm_and_var_Rvalues_c",cluster,"_spearman.png"))
+
+ggplot() +
+  geom_density(aes(meanVarRs, fill = 'mean/variance')) +
+  geom_density(aes(pbMeanVarRs, fill = 'pbMean/variance')) +
+  #xlim(-0.01,1) +
+  xlab('R') +
+  scale_fill_discrete(name = "")
+ggsave(paste0(figDir,"hist_means_and_var_Rvalues_c",cluster,"_spearman.png"))
+
+ggplot() +
+  geom_density(aes(meanDMRs, fill = 'mean/DM')) +
+  geom_density(aes(pbMeanDMRs, fill = 'pbMean/DM')) +
+  #xlim(-0.01,1) +
+  xlab('R') +
+  scale_fill_discrete(name = "")
+ggsave(paste0(figDir,"hist_means_and_dm_Rvalues_c",cluster,"_spearman.png"))
+
+
+
+ggplot() +
+  geom_density(aes(abs(sge_NC_DM_matrix[,1]), fill='NC'), alpha=0.5) +
+  geom_density(aes(abs(sge_LPS_DM_matrix[,1]), fill='LPS'), alpha=0.5) +
+  xlim(0,0.4)
+
+```
+
+
+```{r which betas indicate noisy LPS genes}
+clusterCellID <- as.data.frame(c("00","01","02","03","04","05","06","07"))
+
+colnames(clusterCellID) <- "cluster"
+
+clusterCellID$cellData <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_B_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_elo_nperms_100.RDS",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_elo_nperms_100.RDS")
+
+clusterCellID$cellID <- c("CD8A",
+                          "CD4",
+                          "NK",
+                          "CD8B",
+                          "CD4",
+                          "Bcells",
+                          "CD14hi",
+                          "CD14low")
+
+#00 = CD8_A
+#01 = cd4
+#02 = NK
+#03 = CD8_B
+#04 = cd4 (1&4 combined in paul's analysis)
+#05 = B
+#06 = CD14hi
+#07 = CD14lo
+
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  paulResults <- readRDS(clusterCellID$cellData[c])
+  cellID <- clusterCellID$cellID[c]
+  
+  DMemmreml <- get(paste0("res_fullDFc",cluster))
+  DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+  
+  paulResults <- paulResults[rownames(paulResults) %in% geneList,]
+  
+  expData <- paulResults[,c(2,10,18)]
+  expData$stdbeta_trtLPS <- expData$beta_trtLPS / sqrt(expData$varbeta_trtLPS)
+  colnames(expData) <- paste0(colnames(expData),"_exp")
+  expData$gene <- rownames(expData)
+  
+  dmData <- DMemmreml[,c(2,8,14)]
+  dmData$stdbeta_trtNC <- dmData$beta_trtNC / sqrt(dmData$sdev_trtNC)
+  colnames(dmData) <- paste0(colnames(dmData),"_dm")
+  dmData$gene <- rownames(dmData)
+  
+  dmpbData <- DMPBemmreml[,c(2,8,14)]
+  dmpbData$stdbeta_trtNC <- dmpbData$beta_trtNC / sqrt(dmpbData$sdev_trtNC)
+  colnames(dmpbData) <- paste0(colnames(dmpbData),"_dmpb")
+  dmpbData$gene <- rownames(dmpbData)
+  
+  
+  c01betas <- merge(expData, dmData, by = "gene")
+  c01betas <- merge(c01betas, dmpbData, by = "gene")
+  
+  rownames(c01betas) <- c01betas$gene
+  
+  #how do the betas from treatment look across the 3 models
+  
+  ggplot(data = c01betas, aes(x = stdbeta_trtNC_dm, y = stdbeta_trtNC_dmpb)) +
+    geom_point(alpha = .1) +
+    xlab("Standardized Treatment Betas - DM model") +
+    ylab("Standardized Treatment Betas - DMpb model") +
+    ggtitle(paste0("cluster ",cluster))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_DM_c",cluster,".png"))
+  
+  ggplot(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb)) +
+    geom_point(alpha = .1) +
+    xlab("Standardized Treatment Betas - Pesudobulk model (from Paul)") +
+    ylab("Standardized Treatment Betas - DMpb model") +
+    ggtitle(paste0("cluster ",cluster))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_c",cluster,".png"))
+  
+  
+  dmpbCutoff <- quantile(c01betas$stdbeta_trtNC_dmpb, c(.05))
+  
+  
+  noisyLPSgenes <- subset(c01betas, stdbeta_trtNC_dmpb < dmpbCutoff & stdbeta_trtLPS_exp > 0)
+  nNoisy <- dim(noisyLPSgenes)[1]
+  perNoisy <- 100 * round(nNoisy / dim(c01betas)[1], digits = 3)
+  
+  ggplot() +
+    geom_point(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb), alpha = .1) +
+    geom_point(data = noisyLPSgenes, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb), col = "red", alpha = .5) +
+    xlab("Standardized Treatment Betas - Pesudobulk model (from Paul)") +
+    ylab("Standardized Treatment Betas - DMpb model") +
+    ggtitle(paste0("cluster ",cluster," ",cellID," cells"),
+            subtitle = paste0(nNoisy," highlighted genes, or ",perNoisy,"%"))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_noisyGenes_c",cluster,".png"))
+  
+  sge_LPS_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_pbMean_matrix'))
+  sge_LPS_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DMpb_matrix'))
+  
+  sge_NC_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_pbMean_matrix'))
+  sge_NC_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DMpb_matrix'))
+  
+  #don't need all of them, just plot the top 5
+  #for (geneName in rownames(noisyLPSgenes)) {
+  for (geneName in rownames(head(noisyLPSgenes[order(noisyLPSgenes$stdbeta_trtNC_dmpb),], n = 5))) {
+    #geneName <- "ADAM19"
+    lpsDMpb <- sge_LPS_DMpb_matrix[which(rownames(sge_LPS_DMpb_matrix) == geneName),]
+    ncDMpb <- sge_NC_DMpb_matrix[which(rownames(sge_NC_DMpb_matrix) == geneName),]
+    
+    lpsPBmean <- sge_LPS_pbMean_matrix[which(rownames(sge_LPS_pbMean_matrix) == geneName),]
+    ncPBmean <- sge_NC_pbMean_matrix[which(rownames(sge_NC_pbMean_matrix) == geneName),]
+    
+    geneData <- t(rbind(lpsDMpb,lpsPBmean,ncDMpb,ncPBmean))
+    colnames(geneData) <- c("lpsDMpb","lpsPBmean","ncDMpb","ncPBmean")
+    geneData <- as.data.frame(geneData)
+    
+    DMpbRaw<- melt(geneData[,c(1,3)])
+    DMpbRaw$ID <- c(rownames(geneData),rownames(geneData))
+    DMpbRaw$variable <- factor(DMpbRaw$variable, levels = c("ncDMpb", "lpsDMpb"))
+    
+    PBmeanRaw<- melt(geneData[,c(2,4)])
+    PBmeanRaw$ID <- c(rownames(geneData),rownames(geneData))
+    PBmeanRaw$variable <- factor(PBmeanRaw$variable, levels = c("ncPBmean", "lpsPBmean"))
+    
+    ggplot(data = PBmeanRaw, aes(x = variable, y = value, group = ID, col = ID)) +
+      geom_path() + theme(legend.position = "none") +
+      xlab("treatment") + ylab("pseudobulk mean") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
+    ggsave(paste0(figDir,"noisyGenes_raw_pbMean_c",cluster,"_gene_",geneName,".png"))
+    
+    ggplot(data = DMpbRaw, aes(x = variable, y = value, group = ID, col = ID)) +
+      geom_path() + theme(legend.position = "none") +
+      xlab("treatment") + ylab("DM from pseudobulk") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
+    ggsave(paste0(figDir,"noisyGenes_raw_DMpb_c",cluster,"_gene_",geneName,".png"))
+      
+    ggplot() +
+      geom_point(data = geneData, aes(x = lpsPBmean, y = lpsDMpb), col = "red") +
+      geom_point(data = geneData, aes(x = ncPBmean, y = ncDMpb), col = "gray") +
+      xlab("pseudobulk mean") + ylab("DM from pseudobulk") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName),
+              subtitle = "red = LPS, grey = NC")
+    ggsave(paste0(figDir,"noisyGenes_raw_DMpb_v_pbMean_c",cluster,"_gene_",geneName,".png"))
+  }
+}
+
+
+```
+
+
+```{r how do the mean betas compare to the DM betas}
+
+ggplot(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dm)) +
+  geom_point(alpha = .1)
+
+#what about the betas from elo:trt
+dmDataELO <- res_fullDFc01[,c(2,8,14)+1]
+dmDataELO$stdbeta_trtLPS_elo_centered <- dmDataELO$beta_trtLPS.elo_centered / sqrt(dmDataELO$sdev_trtLPS.elo_centered)
+colnames(dmDataELO) <- paste0(colnames(dmDataELO),"_dm")
+dmDataELO$gene <- rownames(dmDataELO)
+
+
+dmpbDataELO <- res_full_DMpb_c01[,c(2,8,14)+1]
+dmpbDataELO$stdbeta_trtLPS_elo_centered <- dmpbDataELO$beta_trtLPS.elo_centered / sqrt(dmpbDataELO$sdev_trtLPS.elo_centered)
+colnames(dmpbDataELO) <- paste0(colnames(dmpbDataELO),"_dmpb")
+dmpbDataELO$gene <- rownames(dmpbDataELO)
+
+c01betasELO <- merge(dmDataELO, dmpbDataELO, by = "gene")
+
+ggplot(data = c01betasELO, aes(x = stdbeta_trtLPS_elo_centered_dm, y = stdbeta_trtLPS_elo_centered_dmpb)) +
+  geom_point(alpha = .1)
 
 ```
 
