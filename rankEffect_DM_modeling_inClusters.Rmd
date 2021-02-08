@@ -70,7 +70,8 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
 
 
 plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model") {
-  #emmremlDF <- res_fullDF
+  #modelName <- "DMpb_model_AgAsym_c02"
+  #emmremlDF <- res_full_aggAsym_DMpb_c02
   #folderName <- figDir
   
   nVars <- dim(emmremlDF)[2] / 3
@@ -108,7 +109,7 @@ workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
 ```{r loop through clusters to test variance and DM}
 
 for (cluster in c("00","14","02","03","04","05","06","07")) {
-  cluster <- "02"
+  cluster <- "01"
   
   sge_LPS_DM_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DM_matrix'))
   sge_LPS_mean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_mean_matrix'))
@@ -750,6 +751,38 @@ ggsave(paste0(figDir,"individuals_v_clusterCells.png"))
 
 cluster 3 cell counts by individual
 ```{r}
+cellCounts <- read.table("~/Dropbox (Personal)/scRNA/SGE_DM/data/NC_cells_by_ind_large_clusters", header = TRUE)
+
+p1 <- ggplot(data = cellCounts, aes(x = c0)) +
+  geom_histogram(binwidth = 50) + ggtitle("CD8_A") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+p2 <- ggplot(data = cellCounts, aes(x = c1)) +
+  geom_histogram(binwidth = 50) + ggtitle("CD4") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+p3 <- ggplot(data = cellCounts, aes(x = c2)) +
+  geom_histogram(binwidth = 50) + ggtitle("NK") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+p4 <- ggplot(data = cellCounts, aes(x = c3)) +
+  geom_histogram(binwidth = 50) + ggtitle("CD8_B") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+p5 <- ggplot(data = cellCounts, aes(x = c4)) +
+  geom_histogram(binwidth = 50) + ggtitle("CD4") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+p6 <- ggplot(data = cellCounts, aes(x = c5)) +
+  geom_histogram(binwidth = 50) + ggtitle("B Cells") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+p7 <- ggplot(data = cellCounts, aes(x = c14)) +
+  geom_histogram(binwidth = 50) + ggtitle("CD4 c1+c4") +
+  geom_vline(xintercept = 5, col = "red", alpha = .75)
+
+plot_grid(p1,p2,p3,p4,p6,p7, ncol = 3)
+ggsave(paste0(figDir,"cellCount_by_cellType.png"))
 
 ```
 
@@ -819,7 +852,7 @@ ggplot() +
 
 
 ```{r which betas indicate noisy LPS genes}
-clusterCellID <- as.data.frame(c("00","01","02","03","04","05","06","07"))
+clusterCellID <- as.data.frame(c("00","14","02","03","05","06","07"))
 
 colnames(clusterCellID) <- "cluster"
 
@@ -827,7 +860,6 @@ clusterCellID$cellData <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_
                             "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
                             "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_elo_nperms_100.rds",
                             "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_B_modelnum_1_covariate_elo_nperms_100.rds",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
                             "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_elo_nperms_100.rds",
                             "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_elo_nperms_100.RDS",
                             "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_elo_nperms_100.RDS")
@@ -836,7 +868,6 @@ clusterCellID$cellID <- c("CD8A",
                           "CD4",
                           "NK",
                           "CD8B",
-                          "CD4",
                           "Bcells",
                           "CD14hi",
                           "CD14low")
@@ -849,13 +880,13 @@ clusterCellID$cellID <- c("CD8A",
 #05 = B
 #06 = CD14hi
 #07 = CD14lo
+#14 = CD4 1 & 4 combined
 
 for (c in 1:dim(clusterCellID)[1]) {
   cluster <- clusterCellID$cluster[c]
   paulResults <- readRDS(clusterCellID$cellData[c])
   cellID <- clusterCellID$cellID[c]
   
-  DMemmreml <- get(paste0("res_fullDFc",cluster))
   DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
   
   paulResults <- paulResults[rownames(paulResults) %in% geneList,]
@@ -865,30 +896,25 @@ for (c in 1:dim(clusterCellID)[1]) {
   colnames(expData) <- paste0(colnames(expData),"_exp")
   expData$gene <- rownames(expData)
   
-  dmData <- DMemmreml[,c(2,8,14)]
-  dmData$stdbeta_trtNC <- dmData$beta_trtNC / sqrt(dmData$sdev_trtNC)
-  colnames(dmData) <- paste0(colnames(dmData),"_dm")
-  dmData$gene <- rownames(dmData)
-  
   dmpbData <- DMPBemmreml[,c(2,8,14)]
   dmpbData$stdbeta_trtNC <- dmpbData$beta_trtNC / sqrt(dmpbData$sdev_trtNC)
   colnames(dmpbData) <- paste0(colnames(dmpbData),"_dmpb")
   dmpbData$gene <- rownames(dmpbData)
   
   
-  c01betas <- merge(expData, dmData, by = "gene")
-  c01betas <- merge(c01betas, dmpbData, by = "gene")
+  #c01betas <- merge(expData, dmData, by = "gene")
+  c01betas <- merge(expData, dmpbData, by = "gene")
   
   rownames(c01betas) <- c01betas$gene
   
   #how do the betas from treatment look across the 3 models
   
-  ggplot(data = c01betas, aes(x = stdbeta_trtNC_dm, y = stdbeta_trtNC_dmpb)) +
-    geom_point(alpha = .1) +
-    xlab("Standardized Treatment Betas - DM model") +
-    ylab("Standardized Treatment Betas - DMpb model") +
-    ggtitle(paste0("cluster ",cluster))
-  ggsave(paste0(figDir,"c",cluster,"/","StdBetas_DMpb_v_DM_c",cluster,".png"), width = 6, height = 4)
+  # ggplot(data = c01betas, aes(x = stdbeta_trtNC_dm, y = stdbeta_trtNC_dmpb)) +
+  #   geom_point(alpha = .1) +
+  #   xlab("Standardized Treatment Betas - DM model") +
+  #   ylab("Standardized Treatment Betas - DMpb model") +
+  #   ggtitle(paste0("cluster ",cluster))
+  # ggsave(paste0(figDir,"c",cluster,"/","StdBetas_DMpb_v_DM_c",cluster,".png"), width = 6, height = 4)
   
   ggplot(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb)) +
     geom_point(alpha = .1) +
@@ -967,7 +993,7 @@ for (c in 1:dim(clusterCellID)[1]) {
   #rerun this to grab two genes that are high LPS but no change in DM
   # then check those genes for LPS v. var - basically does high LPS always produce high variance?
   pbMeanCutoff <- quantile(c01betas$stdbeta_trtLPS_exp, c(.75))
-  highLPSgenes <- subset(c01betas, stdbeta_trtLPS_exp > pbMeanCutoff & abs(stdbeta_trtNC_dm) < .5)
+  highLPSgenes <- subset(c01betas, stdbeta_trtLPS_exp > pbMeanCutoff & abs(stdbeta_trtNC_dmpb) < .5)
   nHigh <- dim(highLPSgenes)[1]
   
   ggplot() +
@@ -1103,11 +1129,17 @@ FDRs <- c(.01,.05,.1,.2)
 
 trtFDR <- as.data.frame(clusterCellID$cluster)
 elotrtFDR <- as.data.frame(clusterCellID$cluster)
+agAsymtrtFDR <- as.data.frame(clusterCellID$cluster)
+agRectrtFDR <- as.data.frame(clusterCellID$cluster)
+groomtrtFDR <- as.data.frame(clusterCellID$cluster)
 
-colnames(trtFDR) <- colnames(elotrtFDR) <- "cluster"
+colnames(trtFDR) <- colnames(elotrtFDR) <- colnames(agAsymtrtFDR) <- colnames(agRectrtFDR) <- colnames(groomtrtFDR) <- "cluster"
 
 trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
 elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
+agAsymtrtFDR$fdr20 <- agAsymtrtFDR$fdr10 <- agAsymtrtFDR$fdr05 <- agAsymtrtFDR$fdr01 <- 0
+agRectrtFDR$fdr20 <- agRectrtFDR$fdr10 <- agRectrtFDR$fdr05 <- agRectrtFDR$fdr01 <- 0
+groomtrtFDR$fdr20 <- groomtrtFDR$fdr10 <- groomtrtFDR$fdr05 <- groomtrtFDR$fdr01 <- 0
 
 
 for (c in 1:dim(clusterCellID)[1]) {
@@ -1132,6 +1164,9 @@ dmMetaData$nInds <- c(45,45,45,31,45,45,41,43,44,26,20)[1:8]
 
 write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, sep = ",")
 write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(agAsymtrtFDR, file = paste0(workDir,"agAsymTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(agRectrtFDR, file = paste0(workDir,"agRecTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(groomtrtFDR, file = paste0(workDir,"groomTrtFDRcounts.txt"), quote = F, sep = ",")
 
 ```
 
