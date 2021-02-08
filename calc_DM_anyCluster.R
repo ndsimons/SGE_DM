@@ -31,15 +31,23 @@ rm(sge_pbmc)
 
 #NC first
 #treatment <- "NC"
-for (clusterNum in 0:10) {
+#for (clusterNum in c(0:7,14)) {
+for (clusterNum in 14) {
   print(clusterNum)
   cNumDouble <- paste0(floor(clusterNum/10),clusterNum %% 10)
+  
+  #creating new cluster nomenclature "14" which is c1 + c4 = all CD4 cells
+  if (clusterNum == 14) {
+    clusterSubset <- c(1,4)
+  } else {
+  clusterSubset <- clusterNum
+  }
   
   #first, get a list of individuals for use in both treatments
   
   for(treatment in c("NC","LPS")) {
     
-    cObj <- SubsetData(object = get(paste0("sge_pbmc_",treatment)), do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterNum)
+    cObj <- SubsetData(object = get(paste0("sge_pbmc_",treatment)), do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterSubset)
     
     cMeta <- cObj@meta.data %>% as.data.table
     
@@ -73,7 +81,7 @@ for (clusterNum in 0:10) {
       
       tmp <- subset(get(paste0("sge_pbmc_",treatment)), subset = ID == i)
       #pseudobulk straight from sge object
-      obj <- SubsetData(object = tmp, do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterNum)
+      obj <- SubsetData(object = tmp, do.clean = TRUE, do.scale = TRUE, do.center = TRUE, ident.use = clusterSubset)
       sce <- as.SingleCellExperiment(obj, assay="RNA")
       ## QC metrics ##
       names(assays(sce))

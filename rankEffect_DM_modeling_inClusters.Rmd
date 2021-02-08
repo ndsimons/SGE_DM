@@ -101,6 +101,7 @@ library(scales)
 library(reshape2)
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
 ```
 
 
@@ -1403,18 +1404,17 @@ for (c in 1:dim(clusterCellID)[1]) {
     xlab("Standardized Treatment Betas - DM model") +
     ylab("Standardized Treatment Betas - DMpb model") +
     ggtitle(paste0("cluster ",cluster))
-  ggsave(paste0(figDir,"StdBetas_DMpb_v_DM_c",cluster,".png"))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_DM_c",cluster,".png"), width = 6, height = 4)
   
   ggplot(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb)) +
     geom_point(alpha = .1) +
     xlab("Standardized Treatment Betas - Pesudobulk model (from Paul)") +
     ylab("Standardized Treatment Betas - DMpb model") +
     ggtitle(paste0("cluster ",cluster))
-  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_c",cluster,".png"))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_c",cluster,".png"), width = 6, height = 4)
   
   
   dmpbCutoff <- quantile(c01betas$stdbeta_trtNC_dmpb, c(.05))
-  
   
   noisyLPSgenes <- subset(c01betas, stdbeta_trtNC_dmpb < dmpbCutoff & stdbeta_trtLPS_exp > 0)
   nNoisy <- dim(noisyLPSgenes)[1]
@@ -1427,13 +1427,15 @@ for (c in 1:dim(clusterCellID)[1]) {
     ylab("Standardized Treatment Betas - DMpb model") +
     ggtitle(paste0("cluster ",cluster," ",cellID," cells"),
             subtitle = paste0(nNoisy," highlighted genes, or ",perNoisy,"%"))
-  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_noisyGenes_c",cluster,".png"))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_noisyGenes_c",cluster,".png"), width = 6, height = 4)
   
   sge_LPS_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_pbMean_matrix'))
   sge_LPS_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DMpb_matrix'))
+  sge_LPS_var_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_var_matrix'))
   
   sge_NC_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_pbMean_matrix'))
   sge_NC_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DMpb_matrix'))
+  sge_NC_var_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_var_matrix'))
   
   #don't need all of them, just plot the top 5
   #for (geneName in rownames(noisyLPSgenes)) {
@@ -1461,13 +1463,13 @@ for (c in 1:dim(clusterCellID)[1]) {
       geom_path() + theme(legend.position = "none") +
       xlab("treatment") + ylab("pseudobulk mean") +
       ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
-    ggsave(paste0(figDir,"noisyGenes_raw_pbMean_c",cluster,"_gene_",geneName,".png"))
+    ggsave(paste0(figDir,"noisyGenes_raw_pbMean_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
     
     ggplot(data = DMpbRaw, aes(x = variable, y = value, group = ID, col = ID)) +
       geom_path() + theme(legend.position = "none") +
       xlab("treatment") + ylab("DM from pseudobulk") +
       ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
-    ggsave(paste0(figDir,"noisyGenes_raw_DMpb_c",cluster,"_gene_",geneName,".png"))
+    ggsave(paste0(figDir,"noisyGenes_raw_DMpb_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
       
     ggplot() +
       geom_point(data = geneData, aes(x = lpsPBmean, y = lpsDMpb), col = "red") +
@@ -1475,8 +1477,107 @@ for (c in 1:dim(clusterCellID)[1]) {
       xlab("pseudobulk mean") + ylab("DM from pseudobulk") +
       ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName),
               subtitle = "red = LPS, grey = NC")
-    ggsave(paste0(figDir,"noisyGenes_raw_DMpb_v_pbMean_c",cluster,"_gene_",geneName,".png"))
+    ggsave(paste0(figDir,"noisyGenes_raw_DMpb_v_pbMean_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
   }
+  
+  #rerun this to grab two genes that are high LPS but no change in DM
+  # then check those genes for LPS v. var - basically does high LPS always produce high variance?
+  pbMeanCutoff <- quantile(c01betas$stdbeta_trtLPS_exp, c(.75))
+  highLPSgenes <- subset(c01betas, stdbeta_trtLPS_exp > pbMeanCutoff & abs(stdbeta_trtNC_dm) < .5)
+  nHigh <- dim(highLPSgenes)[1]
+  
+  ggplot() +
+    geom_point(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb), alpha = .1) +
+    geom_point(data = highLPSgenes, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb), col = "blue", alpha = .5) +
+    xlab("Standardized Treatment Betas - Pesudobulk model (from Paul)") +
+    ylab("Standardized Treatment Betas - DMpb model") +
+    ggtitle(paste0("cluster ",cluster," ",cellID," cells"),
+            subtitle = paste0(nHigh," highlighted genes"))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_highLPSGenes_c",cluster,".png"), width = 6, height = 4)
+  
+  
+  #don't need all of them, just pick 5 at random
+  randomGeneNames <- sample(rownames(highLPSgenes), size = 5, replace = F)
+  #for (geneName in rownames(noisyLPSgenes)) {
+  
+  highLPSrandomPlot <- highLPSgenes[rownames(highLPSgenes) %in% randomGeneNames,]
+
+  ggplot() +
+    geom_point(data = c01betas, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb), alpha = .1) +
+    geom_point(data = highLPSrandomPlot, aes(x = stdbeta_trtLPS_exp, y = stdbeta_trtNC_dmpb), col = "blue", alpha = .5) +
+    xlab("Standardized Treatment Betas - Pesudobulk model (from Paul)") +
+    ylab("Standardized Treatment Betas - DMpb model") +
+    ggtitle(paste0("cluster ",cluster," ",cellID," cells"),
+            subtitle = paste0(nHigh," highlighted genes"))
+  ggsave(paste0(figDir,"StdBetas_DMpb_v_PaulBetas_highLPSGenes_random_c",cluster,".png"), width = 6, height = 4)
+  
+  
+  
+  for (geneName in randomGeneNames) {
+    #geneName <- sample(rownames(highLPSgenes))[1]
+    
+    lpsDMpb <- sge_LPS_DMpb_matrix[which(rownames(sge_LPS_DMpb_matrix) == geneName),]
+    ncDMpb <- sge_NC_DMpb_matrix[which(rownames(sge_NC_DMpb_matrix) == geneName),]
+    
+    lpsPBmean <- sge_LPS_pbMean_matrix[which(rownames(sge_LPS_pbMean_matrix) == geneName),]
+    ncPBmean <- sge_NC_pbMean_matrix[which(rownames(sge_NC_pbMean_matrix) == geneName),]
+
+    lpsVar <- sge_LPS_var_matrix[which(rownames(sge_LPS_var_matrix) == geneName),]
+    ncVar <- sge_NC_var_matrix[which(rownames(sge_NC_var_matrix) == geneName),]
+    
+    geneData <- t(rbind(lpsDMpb,lpsPBmean,lpsVar,ncDMpb,ncPBmean,ncVar))
+    colnames(geneData) <- c("lpsDMpb","lpsPBmean","lpsVar","ncDMpb","ncPBmean","ncVar")
+    geneData <- as.data.frame(geneData)
+    
+    DMpbRaw <- melt(geneData[,c(1,4)])
+    DMpbRaw$ID <- c(rownames(geneData),rownames(geneData))
+    DMpbRaw$variable <- factor(DMpbRaw$variable, levels = c("ncDMpb", "lpsDMpb"))
+    
+    PBmeanRaw <- melt(geneData[,c(2,5)])
+    PBmeanRaw$ID <- c(rownames(geneData),rownames(geneData))
+    PBmeanRaw$variable <- factor(PBmeanRaw$variable, levels = c("ncPBmean", "lpsPBmean"))
+    
+    VarRaw <- melt(geneData[,c(3,6)])
+    VarRaw$ID <- c(rownames(geneData),rownames(geneData))
+    VarRaw$variable <- factor(VarRaw$variable, levels = c("ncVar", "lpsVar"))
+
+    
+    ggplot(data = PBmeanRaw, aes(x = variable, y = value, group = ID, col = ID)) +
+      geom_path() + theme(legend.position = "none") +
+      xlab("treatment") + ylab("pseudobulk mean") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
+    ggsave(paste0(figDir,"highLPSGenes_raw_pbMean_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
+    
+    ggplot(data = DMpbRaw, aes(x = variable, y = value, group = ID, col = ID)) +
+      geom_path() + theme(legend.position = "none") +
+      xlab("treatment") + ylab("DM from pseudobulk") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
+    ggsave(paste0(figDir,"highLPSGenes_raw_DMpb_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
+
+    ggplot(data = VarRaw, aes(x = variable, y = value, group = ID, col = ID)) +
+      geom_path() + theme(legend.position = "none") +
+      xlab("treatment") + ylab("raw Variance") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName))
+    ggsave(paste0(figDir,"highLPSGenes_raw_Var_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
+    
+    ggplot() +
+      geom_point(data = geneData, aes(x = lpsPBmean, y = lpsDMpb), col = "red") +
+      geom_point(data = geneData, aes(x = ncPBmean, y = ncDMpb), col = "gray") +
+      xlab("pseudobulk mean") + ylab("DM from pseudobulk") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName),
+              subtitle = "red = LPS, grey = NC")
+    ggsave(paste0(figDir,"highLPSGenes_raw_DMpb_v_pbMean_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
+    
+    ggplot() +
+      geom_point(data = geneData, aes(x = lpsPBmean, y = lpsVar), col = "red") +
+      geom_point(data = geneData, aes(x = ncPBmean, y = ncVar), col = "gray") +
+      xlab("pseudobulk mean") + ylab("raw Variance") +
+      ggtitle(paste0("cluster ",cluster,", cell type ",cellID,", gene ",geneName),
+              subtitle = "red = LPS, grey = NC")
+    ggsave(paste0(figDir,"highLPSGenes_raw_Var_v_pbMean_c",cluster,"_gene_",geneName,".png"), width = 6, height = 4)
+
+  }
+  
 }
 
 
@@ -1504,6 +1605,49 @@ c01betasELO <- merge(dmDataELO, dmpbDataELO, by = "gene")
 
 ggplot(data = c01betasELO, aes(x = stdbeta_trtLPS_elo_centered_dm, y = stdbeta_trtLPS_elo_centered_dmpb)) +
   geom_point(alpha = .1)
+
+```
+
+now that we've settled on a model, how many genes pass a basic qval
+```{r}
+#in clusters 00 -> 07
+#how many pass fdr of .01, .05, .10
+#treatment
+#LPS:elo
+
+FDRs <- c(.01,.05,.1,.2)
+
+trtFDR <- as.data.frame(clusterCellID$cluster)
+elotrtFDR <- as.data.frame(clusterCellID$cluster)
+
+colnames(trtFDR) <- colnames(elotrtFDR) <- "cluster"
+
+trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
+elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
+
+
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  
+  cellID <- clusterCellID$cellID[c]
+  
+  DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+  
+  
+  for (f in FDRs) {
+    trtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtNC, fdr.level = f)$significant)
+    elotrtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtLPS.elo_centered, fdr.level = f)$significant)
+  }
+  
+}
+
+
+trtFDR$nGenes <- elotrtFDR$nGenes <- c(6251,7359,2907,749,2541,5416,1214,1266,390,1350,2074)[1:8]
+
+dmMetaData$nInds <- c(45,45,45,31,45,45,41,43,44,26,20)[1:8]
+
+write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, sep = ",")
+write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
 
 ```
 
