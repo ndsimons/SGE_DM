@@ -103,6 +103,8 @@ library(reshape2)
 library(topGO)
 library(biomaRt)
 library(parallel)
+library(mashr)
+library(ggcorrplot)
 
 #others from GSEA?
 #library(cobs); library(parallel); library(doParallel)
@@ -1270,6 +1272,118 @@ for (c in 1:dim(clusterCellID)[1]) {
        
 ```
 
+
+```{r is there correlation between the betas}
+
+#across behavioral metrics
+for (cluster in c("00","14","02","05","06","07")) {
+
+  #cluster <- "00"
+  
+  agRec <- get(paste0("res_full_aggRec_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggRec_DMpb_c",cluster))[,9])
+  agAsym <- get(paste0("res_full_aggAsym_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggAsym_DMpb_c",cluster))[,9]) 
+  groom <- get(paste0("res_full_groom_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_groom_DMpb_c",cluster))[,9])
+  elo <- get(paste0("res_full_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_DMpb_c",cluster))[,9])
+  
+  corBetas <- cor(cbind(-agRec,agAsym,groom,elo))
+  
+  colnames(corBetas) <- rownames(corBetas) <- c("-agRec","agAsym","groom","elo")
+  
+  ggcorrplot(corBetas) + ggtitle(paste0("c",cluster," - ",clusterCellID$cellID[(which(clusterCellID$cluster == cluster))]))
+  
+  ggsave(paste0(figDir,"/LPS_behavior_beta_correlations_c",cluster,".png"))
+  
+  
+  ##NC v LPS within treatments
+  
+  NC1 <- get(paste0("res_full_aggRec_DMpb_c",cluster))[,4] / sqrt(get(paste0("res_full_aggRec_DMpb_c",cluster))[,10])
+  LPS1 <- get(paste0("res_full_aggRec_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggRec_DMpb_c",cluster))[,9])
+  
+  p1 <- ggplot() +
+    geom_point(aes(x = LPS1, y = NC1), alpha = .1) +
+    geom_smooth(aes(x = LPS1, y = NC1), method = "lm") +
+    ggtitle(paste0("c",cluster," - agRec"))
+  
+  NC2 <- get(paste0("res_full_aggAsym_DMpb_c",cluster))[,4] / sqrt(get(paste0("res_full_aggAsym_DMpb_c",cluster))[,10])
+  LPS2 <- get(paste0("res_full_aggAsym_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggAsym_DMpb_c",cluster))[,9])
+  
+  p2 <- ggplot() +
+    geom_point(aes(x = LPS2, y = NC2), alpha = .1) +
+    geom_smooth(aes(x = LPS2, y = NC2), method = "lm") +
+    ggtitle(paste0("c",cluster," - agAsym"))
+  
+  NC3 <- get(paste0("res_full_groom_DMpb_c",cluster))[,4] / sqrt(get(paste0("res_full_groom_DMpb_c",cluster))[,10])
+  LPS3 <- get(paste0("res_full_groom_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_groom_DMpb_c",cluster))[,9])
+  
+  p3 <- ggplot() +
+    geom_point(aes(x = LPS3, y = NC3), alpha = .1) +
+    geom_smooth(aes(x = LPS3, y = NC3), method = "lm") +
+    ggtitle(paste0("c",cluster," - groom"))
+  
+  NC4 <- get(paste0("res_full_DMpb_c",cluster))[,4] / sqrt(get(paste0("res_full_DMpb_c",cluster))[,10])
+  LPS4 <- get(paste0("res_full_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_DMpb_c",cluster))[,9])
+  
+  p4 <- ggplot() +
+    geom_point(aes(x = LPS4, y = NC4), alpha = .1) +
+    geom_smooth(aes(x = LPS4, y = NC4), method = "lm") +
+    ggtitle(paste0("c",cluster," - elo"))
+  
+  plot_grid(p1,p2,p3,p4, ncol = 2)
+  ggsave(paste0(figDir,"/LPS_v_NC_nested_behavior_betas_c",cluster,".png"))
+}
+
+
+
+```
+
+```{r are there genes in common across behavioral variables}
+
+for (c in c(1:3,5:7)) {
+  
+  cluster <- clusterCellID$cluster[c]
+  
+  cellID <- clusterCellID$cellID[c]
+  
+  f <- .2
+  
+  DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+  eloList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  DMPBemmreml <- get(paste0("res_full_aggAsym_DMpb_c",cluster))
+  agAsymList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+  agRecList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+  groomList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+
+  MyVenn <- venneuler(c(A=length(groomList),
+                      B=length(agRecList),
+                      C=length(agAsymList),
+                      D=length(eloList),
+                      "A&B"=length(intersect(groomList,agRecList)),
+                      "B&C"=length(intersect(agAsymList,agRecList)),
+                      "A&C"=length(intersect(agAsymList,groomList)),
+                      "A&D"=length(intersect(groomList,eloList)),
+                      "B&D"=length(intersect(agRecList,eloList)),
+                      "C&D"=length(intersect(agAsymList,eloList)),
+                      "A&B&C"=length(intersect(intersect(groomList,agRecList),agAsymList)),
+                      "A&B&D"=length(intersect(intersect(groomList,agRecList),eloList)),
+                      "A&C&D"=length(intersect(intersect(groomList,agAsymList),eloList)),
+                      "B&C&D"=length(intersect(intersect(agAsymList,agRecList),eloList)),
+                      "A&B&C&D"=length(intersect(intersect(groomList,agRecList),intersect(eloList,agAsymList)))))
+  MyVenn$labels <- c(paste0("groom\n",length(groomList)),
+                     paste0("agRec\n",length(agRecList)),
+                     paste0("agAsym\n",length(agAsymList)),
+                     paste0("elo\n",length(eloList)))
+  #MyVenn$labels <- c("A\n22","B\n7","C\n5","D\n58")
+  plot(MyVenn, main = paste0("c",cluster," - ",cellID))
+}
+
+
+
+
+```
+
+
 GSEA for Agonisms Received (strongest signal)
 ```{r GSEA and pathway analysis}
 ### Permutation-based GSEA tests
@@ -1287,15 +1401,15 @@ weight <- 1 ## Weight to place on betas. Typically either a 1 or a 0, where 0 we
 
 for (cluster in clusterCellID$cluster) {
     
-  cluster <- "00"
+  #cluster <- "00"
   dir.create(paste0(workDir,"figures/gsea/c",cluster))
   
   for (lmVar in c("trt","behav")) {
     
-    lmVar <- "trt" #can be trt or behav
+    #lmVar <- "trt" #can be trt or behav
     
     #starting with c00, treatment | res_full_aggRec_DMpb_c00
-    DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
     
     #if we're dealing with treatment use col 2, behavior col 3
     sampleBetas <- as.data.frame(rownames(DMPBemmreml))
@@ -1560,7 +1674,34 @@ allGeneList <- names(
                             rownames(res_full_aggAsym_DMpb_c05),
                             rownames(res_full_aggAsym_DMpb_c06),
                             rownames(res_full_aggAsym_DMpb_c07))) == 7])
+length(lrgClustGeneList)
 
+length(allCellsGeneList)
+
+length(allGeneList)
+
+
+beta <- as.data.frame(allCellsGeneList)
+betaSE <- as.data.frame(allCellsGeneList)
+
+#treatment betas
+for (cluster in c("00","14","02","05","06","07")) {
+  tmpEMMREMLout <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+
+  tmpBetas <- tmpEMMREMLout$beta_trtNC[rownames(tmpEMMREMLout) %in% allCellsGeneList]
+  tmpBetaSE <- tmpEMMREMLout$sdev_trtNC[rownames(tmpEMMREMLout) %in% allCellsGeneList]
+  tmpBetaSE <- sqrt(tmpBetaSE)
+  beta <- cbind(beta,tmpBetas)
+  betaSE <- cbind(betaSE,tmpBetaSE)
+  colnames(beta)[dim(beta)[2]] <- paste0("c",cluster)
+  colnames(betaSE)[dim(betaSE)[2]] <- paste0("c",cluster)
+}
+
+rownames(beta) <- beta$allCellsGeneList
+beta <- beta[,-1]
+
+rownames(betaSE) <- betaSE$allCellsGeneList
+betaSE <- betaSE[,-1]
 
 #Read in betas and standard error for betas in a matrix form of :
 #row=gene
@@ -1571,11 +1712,15 @@ allGeneList <- names(
 #etc...
 
 #Can have no missing effects
-keep<-apply(early_beta,1,function(x){length(which(is.na(x)))})
+### handled above
+#keep<-apply(early_beta,1,function(x){length(which(is.na(x)))})
 
 #Here looking at the effect of different early life adversities modeled together
-Bhat<-as.matrix(early_beta[keep==0,10:21])
-Shat<-as.matrix(se_early_beta[keep==0,10:21])
+#Bhat<-as.matrix(early_beta[keep==0,10:21])
+#Shat<-as.matrix(se_early_beta[keep==0,10:21])
+
+Bhat<-as.matrix(beta)
+Shat<-as.matrix(betaSE)
 
 #Running mashr with the gemma betas 
 #Read in data
@@ -1592,7 +1737,7 @@ strong = get_significant_results(m.1by1,0.00001)
 #Obtain initial data-driven covariance matrices
 U.pca= cov_pca(data,4,strong)
 
-#How does each conditionload onto the principle eigenvectors? 
+#How does each condition load onto the principle eigenvectors? 
 #You can ignore this, this is just to look at how the different subgroups or conditions ,
 #load onto the major PCs of the effect matrices
 
