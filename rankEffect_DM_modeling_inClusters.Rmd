@@ -100,6 +100,8 @@ library(stringr)
 library(qvalue)
 library(scales)
 library(reshape2)
+library(topGO)
+library(biomaRt)
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
@@ -1135,11 +1137,11 @@ groomtrtFDR <- as.data.frame(clusterCellID$cluster)
 
 colnames(trtFDR) <- colnames(elotrtFDR) <- colnames(agAsymtrtFDR) <- colnames(agRectrtFDR) <- colnames(groomtrtFDR) <- "cluster"
 
-trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
-elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
-agAsymtrtFDR$fdr20 <- agAsymtrtFDR$fdr10 <- agAsymtrtFDR$fdr05 <- agAsymtrtFDR$fdr01 <- 0
-agRectrtFDR$fdr20 <- agRectrtFDR$fdr10 <- agRectrtFDR$fdr05 <- agRectrtFDR$fdr01 <- 0
-groomtrtFDR$fdr20 <- groomtrtFDR$fdr10 <- groomtrtFDR$fdr05 <- groomtrtFDR$fdr01 <- 0
+trtFDR$nGenes <- trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
+elotrtFDR$nGenes <- elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
+agAsymtrtFDR$nGenes <- agAsymtrtFDR$fdr20 <- agAsymtrtFDR$fdr10 <- agAsymtrtFDR$fdr05 <- agAsymtrtFDR$fdr01 <- 0
+agRectrtFDR$nGenes <- agRectrtFDR$fdr20 <- agRectrtFDR$fdr10 <- agRectrtFDR$fdr05 <- agRectrtFDR$fdr01 <- 0
+groomtrtFDR$nGenes <- groomtrtFDR$fdr20 <- groomtrtFDR$fdr10 <- groomtrtFDR$fdr05 <- groomtrtFDR$fdr01 <- 0
 
 
 for (c in 1:dim(clusterCellID)[1]) {
@@ -1147,26 +1149,340 @@ for (c in 1:dim(clusterCellID)[1]) {
   
   cellID <- clusterCellID$cellID[c]
   
-  DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
-  
-  
   for (f in FDRs) {
+    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
     trtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtNC, fdr.level = f)$significant)
     elotrtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtLPS.elo_centered, fdr.level = f)$significant)
+    trtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    elotrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_aggAsym_DMpb_c",cluster))
+    agAsymtrtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtLPS.aggAsymm_cent, fdr.level = f)$significant)
+    agAsymtrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+    agRectrtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtLPS.aggRec_cent, fdr.level = f)$significant)
+    agRectrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+    groomtrtFDR[c,(which(FDRs == f) + 1)] <- sum(qvalue(p = DMPBemmreml$p_value_trtLPS.groom_cent, fdr.level = f)$significant)
+    groomtrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
   }
   
 }
 
-
-trtFDR$nGenes <- elotrtFDR$nGenes <- c(6251,7359,2907,749,2541,5416,1214,1266,390,1350,2074)[1:8]
-
-dmMetaData$nInds <- c(45,45,45,31,45,45,41,43,44,26,20)[1:8]
 
 write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, sep = ",")
 write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
 write.table(agAsymtrtFDR, file = paste0(workDir,"agAsymTrtFDRcounts.txt"), quote = F, sep = ",")
 write.table(agRectrtFDR, file = paste0(workDir,"agRecTrtFDRcounts.txt"), quote = F, sep = ",")
 write.table(groomtrtFDR, file = paste0(workDir,"groomTrtFDRcounts.txt"), quote = F, sep = ",")
+
+```
+
+
+```{r pvalue plots}
+#elo
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+
+  plot_grid(ggplot(data = DMPBemmreml, aes(x = p_value_.Intercept.)) +
+    geom_histogram(bins = 100) + ggtitle(paste0("elo_DMpb_c",cluster)),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.elo_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.elo_centered)) +
+    geom_histogram(bins = 100), ncols = 3)
+  ggsave(paste0(figDir,"c",cluster,"/elo_pval_allHists_",cluster,".png"), width = 8, height = 6)
+}
+
+#agRec
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+
+  plot_grid(ggplot(data = DMPBemmreml, aes(x = p_value_.Intercept.)) +
+    geom_histogram(bins = 100) + ggtitle(paste0("agRec_DMpb_c",cluster)),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.aggRec_cent)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.aggRec_cent)) +
+    geom_histogram(bins = 100), ncols = 3)
+  ggsave(paste0(figDir,"c",cluster,"/agRec_pval_allHists_",cluster,".png"), width = 8, height = 6)
+}
+
+#agAsym
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  DMPBemmreml <- get(paste0("res_full_aggAsym_DMpb_c",cluster))
+
+  plot_grid(ggplot(data = DMPBemmreml, aes(x = p_value_.Intercept.)) +
+    geom_histogram(bins = 100) + ggtitle(paste0("agAsym_DMpb_c",cluster)),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.aggAsymm_cent)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.aggAsymm_cent)) +
+    geom_histogram(bins = 100), ncols = 3)
+  ggsave(paste0(figDir,"c",cluster,"/agAsym_pval_allHists_",cluster,".png"), width = 8, height = 6)
+}
+
+#groom
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+
+  plot_grid(ggplot(data = DMPBemmreml, aes(x = p_value_.Intercept.)) +
+    geom_histogram(bins = 100) + ggtitle(paste0("groom_DMpb_c",cluster)),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC.groom_cent)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtNC)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.age_centered)) +
+    geom_histogram(bins = 100),
+    ggplot(data = DMPBemmreml, aes(x = p_value_trtLPS.groom_cent)) +
+    geom_histogram(bins = 100), ncols = 3)
+  ggsave(paste0(figDir,"c",cluster,"/grooming_pval_allHists_",cluster,".png"), width = 8, height = 6)
+}
+       
+       
+       
+```
+
+GSEA for Agonisms Received (strongest signal)
+```{r GSEA and pathway analysis}
+### Permutation-based GSEA tests
+### Originally developed by Jordan Anderson and Noah Snyder-Mackler. Modified by Tauras Vilgalys. 
+### Last updated 2020 September 16
+
+###outside R, build a csv file with geneName,hallmarkPathway
+
+# Parameter options on lines 11 and 12
+# Data and files to load on lines 16 and 30
+## parameters to consider: 
+pvals <- F ## are data in pvalues or betas? If betas, set pvals to FALSE
+weight <- 1 ## Weight to place on betas. Typically either a 1 or a 0, where 0 weights all effects equally.
+        ## weight=0 acts like a KS test, and is typically used with pvalues. 
+
+sampleBetas <- as.data.frame(rownames(fluEXPemmreml))
+sampleBetas$Betas <- fluEXPemmreml$beta_treatment
+
+colnames(sampleBetas) <- c("Gene","Betas")
+
+## get gene.list
+gene.list <- sampleBetas$Gene
+
+## get nperm permutations of the vector of Betas
+nperm <- 250
+for (i in 1:nperm) {
+  tmpB <- sample(sampleBetas$Beta)
+  cbind(sampleBetas,tmpB) -> sampleBetas; rm(tmpB)
+}; rm(i)#; head(sampleBetas)
+
+## Get the list of gene sets to test. here the file starts with gene names and the associated GO terms. 
+
+## i downloaded these hallmark gene sets from https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+
+gene.set <- read.table("~/Dropbox (Personal)/DNHS/hallmark_genes/hallmarkPathways.csv", sep = ",")
+
+colnames(gene.set) <- c("Associated.Gene.Name","GO.Term.Accession")
+
+gene.set$gene_GO <- paste0(gene.set$Associated.Gene.Name,"_",gene.set$GO.Term.Accession)
+
+# Trim for expressed genes where B was estimated
+gene.set2 <- subset(gene.set, gene.set$Associated.Gene.Name %in% sampleBetas$Gene)
+
+
+# Remove duplicated gene/GO pairings
+gene.set2 <- gene.set2[!duplicated(gene.set2$gene_GO),]
+
+## Get list of gene ontologies to test, and the number of genes in each
+GO_res <- as.data.frame(matrix(ncol=2, nrow=length(unique(gene.set2$GO.Term.Accession)), unique(gene.set2$GO.Term.Accession)))
+GO_res$V2 <- 0
+GO_res <- GO_res[!(GO_res$V1 == ""),]; colnames(GO_res) <- c("GO", "n_genes")
+for (i in 1:nrow(GO_res)) {
+  GO_res$n_genes[i] <- sum(gene.set2$GO.Term.Accession == GO_res$GO[i])
+  }
+rm(i)
+GO_res$n_genes <- as.numeric(GO_res$n_genes)
+
+## Only consider gene sets with at least 5 measured genes
+GO_res <- subset(GO_res, n_genes >= 5)
+
+## Create a matrix of just the effect sizes, moving the gene names to the row.names
+effect_size_matrix<-sampleBetas[,-1]
+row.names(effect_size_matrix) <- sampleBetas[,1]
+
+
+## GSEA function
+### p-values are calculated based on a cdf. Another option would be to use a z-statistic, however that would assume normality? 
+GSEA=function(effect_size_matrix,gene_set_list,gene_GO_associations, weight=1,num.cores=NA,pvals=F){
+  ## effect_size_matrix == gene x permutations matrix where rownames are the genes and the first column is the observed effect sizes (i.e., columns 2:ncol are the permuted betas)
+  if (is.na(num.cores)) num.cores=detectCores()
+  clus = makeCluster(getOption("cl.cores", num.cores))
+  clusterExport(clus,varlist=ls(),envir=environment())
+  a=parApply(clus,effect_size_matrix,2,function(tmp_data){
+    names(tmp_data)=rownames(effect_size_matrix)
+    tmp_data=sort(tmp_data,decreasing = T)
+    correl.vector<-tmp_data
+    tmp_all_genes<-names(tmp_data)
+    #So that we ultimately weight on our betas when weight==1
+    weighted.score.type=weight
+    Reduce(rbind,lapply(gene_set_list,function(GOcat){
+      tmp_set <- gene_GO_associations$Associated.Gene.Name[gene_GO_associations$GO.Term.Accession == GOcat]
+      #First we're indexing what genes are or aren't in our gene set (1 vs 0)
+      tag.indicator <- sign(match(tmp_all_genes, tmp_set, nomatch=0)) 
+      no.tag.indicator <- 1 - tag.indicator 
+      N <- length(tmp_all_genes) 
+      Nh <- length(tmp_set) 
+      Nm <-  N - Nh 
+      #This is just if we want to do a KS test(maybe if we want to compare later to some of your results using GAGE); weight==0
+      if (weight == 0) {
+        correl.vector <- rep(1, N)
+      }
+      alpha <- weighted.score.type
+      if (pvals==T) {correl.vector=-log10(correl.vector)}
+      correl.vector <- abs(correl.vector**alpha)
+      #Normalizing our Incremental increase by the sum of the abs our "correlations" (sum.correl.tag) and 
+      #normalizing our incremental decrease by the number of genes not in our set (Nm, which remember came from N-Nh above).
+      sum.correl.tag  <- sum(correl.vector[which(tag.indicator == 1)])
+      #attempting to remove the normalization
+      norm.tag    <- 1.0 / sum.correl.tag
+      norm.no.tag <- 1.0 / Nm
+      #Then we just walk down the gene list adding or substracting as such
+      ## don't use normalization in the math
+      RES <- cumsum(tag.indicator * correl.vector * norm.tag - no.tag.indicator * norm.no.tag)
+      #RES <- cumsum(tag.indicator * correl.vector - no.tag.indicator)
+      #Then obviously this is for maximum positively vs negatively enriched 
+      max.ES <- max(RES)
+      min.ES <- min(RES)
+      if (max.ES > - min.ES) {
+        #      ES <- max.ES
+        ES <- signif(max.ES, digits = 5)
+        arg.ES <- which.max(RES)
+      } else {
+        #      ES <- min.ES
+        ES <- signif(min.ES, digits=5)
+        arg.ES <- which.min(RES)
+      }
+      #if (length(gene_set)==1) {plot(cumsum(tag.indicator * correl.vector * norm.tag - no.tag.indicator * norm.no.tag),type = "l",xlab="Gene Index",ylab="Running Enrichment Score",xaxt="n"); axis(1,at=tag.indicator*1:length(tag.indicator),labels=T,tick=T)}
+      return(c(max.ES,min.ES))}))
+  })
+  ## Returns two columns, one for upreg and one for downreg
+  a=data.frame(a)
+  a_upreg=a[1:length(gene_set_list),]
+  a_downreg=a[(length(gene_set_list)+1):nrow(a),]
+  rownames(a_upreg)=names(gene_set_list)
+  rownames(a_downreg)=names(gene_set_list)
+  #rownames(a)=names(gene.set)
+  ## This doesn't seem right. Why would the pvals be lower if the max doesn't exceed the null?
+  pvals_upreg=apply(a_upreg,1,function(x){
+    #signif((sum(x[1] >= x[2:length(x)])+1)/(length(x)), digits=5)
+    ee <- ecdf(x[2:length(x)]); 1 - ee(x[1])
+    })
+  names(pvals_upreg)=names(gene_set_list)
+  pvals_downreg=apply(a_downreg,1,function(x){
+    #signif((sum(x[1] <= x[2:length(x)])+1)/(length(x)), digits=5)
+    ee <- ecdf(x[2:length(x)]); ee(x[1])
+    })
+  names(pvals_downreg)=names(gene_set_list)
+  pvals=cbind(pvals_upreg,pvals_downreg); colnames(pvals)=c("pval_upreg","pval_downreg")
+  output=list(a_upreg,a_downreg,pvals)
+}
+
+## Run GSEA function for each GO term (defined earlier in GO_res$GO)
+output<-GSEA(effect_size_matrix = effect_size_matrix,
+             gene_set_list = unique(GO_res$GO),
+             gene_GO_associations = gene.set2,
+             weight = 1, pvals=F)
+
+names(output)=c("NES_matrix_upreg","NES_matrix_downreg","p_values")
+
+
+
+
+# Normalize + ES' by the mean of + ES values, and - ES' by the mean of - ES null values for that gene set. 
+##This should effectively control for differences in gene set size
+pos.ES.norm<-matrix(0,nrow=nrow(GO_res),ncol=nperm+1)
+neg.ES.norm<-matrix(0,nrow=nrow(GO_res),ncol=nperm+1)
+for (i in 1:length(GO_res$GO)) {
+         pos.ES <- unlist(output$NES_matrix_upreg[i,])
+         names(pos.ES)<-NULL
+         neg.ES <- unlist(output$NES_matrix_downreg[i,])
+          names(neg.ES)<-NULL
+         #for a given gene set, N, calculate the mean of the positive max ES for estimated+ permuted ES.
+         #calculate the mean of the max negative ES for estimate+ permuted ES also
+         pos.m <- mean(pos.ES)
+         neg.m <- mean(abs(neg.ES))
+         #Then for each permutation in that geneset, scale ES by this mean value, depending on if it was max + or max - ES
+         for (j in 1:(nperm+1)){
+         pos.ES.norm[i,j]<-pos.ES[j]/pos.m
+         neg.ES.norm[i,j]<-neg.ES[j]/neg.m
+         }
+}
+# FDR? 
+## Calculate p-values for one of the null distributions as well
+perm_upreg <- apply(output$NES_matrix_upreg[,-1],1,function(x) {ee <- ecdf(x[2:length(x)]); 1 - ee(x[1])})
+perm_downreg <- apply(output$NES_matrix_downreg[,-1],1,function(x) {ee <- ecdf(x[2:length(x)]); 1 - ee(x[1])})
+## Use perm.fdr function (written by Joaquin Sanz, available from Snyder-Mackler et al. 2016: https://github.com/nsmackler/status_genome_2016/blob/master/perm_FDR.R)
+
+
+fdr_up <- perm.fdr(output$p_values, perm_upreg, "pval_upreg", "fdr_vsPerm1")
+fdr_down <- perm.fdr(output$p_values, perm_upreg, "pval_downreg", "fdr_vsPerm1")
+
+upregNES <- output$NES_matrix_upreg[,1]
+dnregNES <- output$NES_matrix_downreg[,1]
+
+
+cbind(as.character(GO_res$GO),output$p_values)
+
+#plot significant effects
+betasOnly <- as.data.frame(effect_size_matrix$Betas)
+colnames(betasOnly) <- c("betas")
+betasOnly$rank <- rank(betasOnly$betas)
+
+for (r in 1:2) {
+  if(sum(output$p_values[,r] < .05) > 0) {
+    for (g in which(output$p_values[,r] < .05)) {
+      pathwayName <- as.character(GO_res$GO)[g]
+      pathwayGenes <- subset(gene.set2, GO.Term.Accession == pathwayName)$Associated.Gene.Name
+      betasOnly$pathway <- FALSE
+      betasOnly$pathway <- rownames(effect_size_matrix) %in% pathwayGenes
+      
+      betasPathway <- subset(betasOnly, pathway)
+      ggplot() +
+        geom_linerange(aes(x = betasOnly$rank, ymax = betasOnly$betas, ymin = 0), alpha = 66/dim(effect_size_matrix)[1]) +
+        geom_linerange(aes(x = betasPathway$rank, ymax = betasPathway$betas, ymin = 0)) +
+        xlab("Rank") + ggtitle(pathwayName, 
+                               subtitle = paste0(subset(GO_res, GO == pathwayName)$n_genes," genes, ",
+                                                 "p = ",as.numeric(output$p_values[g,r]),"    ",colnames(output$p_values)[r]))
+      ggsave(paste0(workDir,"figures/gsea/gsea_stickPlot_fluEXPmodel_treatment_",pathwayName,".png"), width = 6, height = 4)
+    }
+  }
+}
+
+fluEXPgseaTreatment <- output
+
+cbind(as.character(GO_res$GO),fluEXPgseaTreatment$p_values,fluEXPgseaTreatment$NES_matrix_upreg[,1],fluEXPgseaTreatment$NES_matrix_downreg[,1])
+
+
 
 ```
 
