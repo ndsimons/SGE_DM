@@ -102,6 +102,10 @@ library(scales)
 library(reshape2)
 library(topGO)
 library(biomaRt)
+library(parallel)
+
+#others from GSEA?
+#library(cobs); library(parallel); library(doParallel)
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
@@ -1281,8 +1285,9 @@ pvals <- F ## are data in pvalues or betas? If betas, set pvals to FALSE
 weight <- 1 ## Weight to place on betas. Typically either a 1 or a 0, where 0 weights all effects equally.
         ## weight=0 acts like a KS test, and is typically used with pvalues. 
 
-sampleBetas <- as.data.frame(rownames(fluEXPemmreml))
-sampleBetas$Betas <- fluEXPemmreml$beta_treatment
+#starting with c00, agonisms received
+sampleBetas <- as.data.frame(rownames(res_full_aggRec_DMpb_c00))
+sampleBetas$Betas <- res_full_aggRec_DMpb_c00$beta_trtNC
 
 colnames(sampleBetas) <- c("Gene","Betas")
 
@@ -1300,7 +1305,7 @@ for (i in 1:nperm) {
 
 ## i downloaded these hallmark gene sets from https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
 
-gene.set <- read.table("~/Dropbox (Personal)/DNHS/hallmark_genes/hallmarkPathways.csv", sep = ",")
+gene.set <- read.table(paste0(workDir,"hallmark_genes/hallmarkPathways.csv"), sep = ",")
 
 colnames(gene.set) <- c("Associated.Gene.Name","GO.Term.Accession")
 
@@ -1473,14 +1478,14 @@ for (r in 1:2) {
         xlab("Rank") + ggtitle(pathwayName, 
                                subtitle = paste0(subset(GO_res, GO == pathwayName)$n_genes," genes, ",
                                                  "p = ",as.numeric(output$p_values[g,r]),"    ",colnames(output$p_values)[r]))
-      ggsave(paste0(workDir,"figures/gsea/gsea_stickPlot_fluEXPmodel_treatment_",pathwayName,".png"), width = 6, height = 4)
+      ggsave(paste0(workDir,"figures/gsea/","c00","/gsea_stickPlot_c00_trtNC_",pathwayName,".png"), width = 6, height = 4)
     }
   }
 }
 
-fluEXPgseaTreatment <- output
+gseaC00trtNC <- output
 
-cbind(as.character(GO_res$GO),fluEXPgseaTreatment$p_values,fluEXPgseaTreatment$NES_matrix_upreg[,1],fluEXPgseaTreatment$NES_matrix_downreg[,1])
+cbind(as.character(GO_res$GO),gseaC00trtNC$p_values,gseaC00trtNC$NES_matrix_upreg[,1],gseaC00trtNC$NES_matrix_downreg[,1])
 
 
 
