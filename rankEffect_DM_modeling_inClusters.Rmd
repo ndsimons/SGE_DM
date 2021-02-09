@@ -103,6 +103,7 @@ library(reshape2)
 library(topGO)
 library(biomaRt)
 library(parallel)
+library(mashr)
 
 #others from GSEA?
 #library(cobs); library(parallel); library(doParallel)
@@ -1287,12 +1288,12 @@ weight <- 1 ## Weight to place on betas. Typically either a 1 or a 0, where 0 we
 
 for (cluster in clusterCellID$cluster) {
     
-  cluster <- "00"
+  #cluster <- "00"
   dir.create(paste0(workDir,"figures/gsea/c",cluster))
   
   for (lmVar in c("trt","behav")) {
     
-    lmVar <- "trt" #can be trt or behav
+    #lmVar <- "trt" #can be trt or behav
     
     #starting with c00, treatment | res_full_aggRec_DMpb_c00
     DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
