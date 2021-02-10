@@ -1329,7 +1329,7 @@ for (cluster in c("00","14","02","05","06","07")) {
     ggtitle(paste0("c",cluster," - elo"))
   
   plot_grid(p1,p2,p3,p4, ncol = 2)
-  ggsave(paste0(figDir,"/LPS_v_NC_nested_behavior_betas_c",cluster,".png"))
+  ggsave(paste0(figDir,"/LPS_v_NC_nested_behavior_betas_correlations_c",cluster,".png"))
 }
 
 
