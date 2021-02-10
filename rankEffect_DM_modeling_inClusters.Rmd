@@ -5,6 +5,32 @@ date: "1/29/2021"
 output: html_document
 ---
 
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(limma)
+library(edgeR)
+library(EMMREML)
+library(cobs)
+library(cowplot)
+library(snakecase)
+library(stringr)
+library(qvalue)
+library(scales)
+library(reshape2)
+library(topGO)
+library(biomaRt)
+library(parallel)
+library(mashr)
+library(ggcorrplot)
+
+#others from GSEA?
+#library(cobs); library(parallel); library(doParallel)
+
+figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
+```
+
 load helpful functions
 ```{r}
 perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
@@ -86,31 +112,6 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
   }
 }
 
-```
-
-```{r packages, include=FALSE}
-library(ggplot2)
-library(limma)
-library(edgeR)
-library(EMMREML)
-library(cobs)
-library(cowplot)
-library(snakecase)
-library(stringr)
-library(qvalue)
-library(scales)
-library(reshape2)
-library(topGO)
-library(biomaRt)
-library(parallel)
-library(mashr)
-library(ggcorrplot)
-
-#others from GSEA?
-#library(cobs); library(parallel); library(doParallel)
-
-figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
-workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
 ```
 
 
@@ -1346,14 +1347,23 @@ for (c in c(1:3,5:7)) {
   
   f <- .2
   
+  #up or down
+  betaDir <- "down"
+  
+  if (betaDir == "down") {
+    flip <- -1
+  } else {
+    flip <- 1
+  }
+  
   DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
-  eloList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  eloList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant & (flip * DMPBemmreml[,3]) > 0]
   DMPBemmreml <- get(paste0("res_full_aggAsym_DMpb_c",cluster))
-  agAsymList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  agAsymList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant & (flip * DMPBemmreml[,3]) > 0]
   DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
-  agRecList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  agRecList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant & (-flip * DMPBemmreml[,3]) > 0]
   DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
-  groomList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant]
+  groomList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,15], fdr.level = f)$significant & (flip * DMPBemmreml[,3]) > 0]
 
   MyVenn <- venneuler(c(A=length(groomList),
                       B=length(agRecList),
@@ -1371,15 +1381,60 @@ for (c in c(1:3,5:7)) {
                       "B&C&D"=length(intersect(intersect(agAsymList,agRecList),eloList)),
                       "A&B&C&D"=length(intersect(intersect(groomList,agRecList),intersect(eloList,agAsymList)))))
   MyVenn$labels <- c(paste0("groom\n",length(groomList)),
-                     paste0("agRec\n",length(agRecList)),
+                     paste0("-agRec\n",length(agRecList)),
                      paste0("agAsym\n",length(agAsymList)),
                      paste0("elo\n",length(eloList)))
   #MyVenn$labels <- c("A\n22","B\n7","C\n5","D\n58")
-  plot(MyVenn, main = paste0("c",cluster," - ",cellID))
+  plot(MyVenn, main = paste0("c",cluster," - ",cellID," - ",betaDir,"-regulated"))
 }
 
 
+### same question - but for CD8, CD4, NK cells and Treatment variable which is col 14
 
+DMPBemmreml <- get(paste0("res_full_DMpb_c","00"))
+cd8List <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,14], fdr.level = f)$significant]
+DMPBemmreml <- get(paste0("res_full_DMpb_c","14"))
+cd4List <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,14], fdr.level = f)$significant]
+DMPBemmreml <- get(paste0("res_full_DMpb_c","02"))
+nkList <- rownames(DMPBemmreml)[qvalue(p = DMPBemmreml[,14], fdr.level = f)$significant]
+
+MyVenn <- venneuler(c(A=length(cd8List),
+                    B=length(cd4List),
+                    C=length(nkList),
+                    "A&B"=length(intersect(cd8List,cd4List)),
+                    "B&C"=length(intersect(nkList,cd4List)),
+                    "A&C"=length(intersect(cd8List,nkList)),
+                    "A&B&C"=length(intersect(intersect(cd8List,cd4List),nkList))))
+MyVenn$labels <- c(paste0("cd8\n",length(cd8List)),
+                   paste0("cd4\n",length(cd4List)),
+                   paste0("nk\n",length(nkList)))
+#MyVenn$labels <- c("A\n22","B\n7","C\n5","D\n58")
+plot(MyVenn, main = paste0("treatment fdr 0.20"))
+
+
+DMPBemmreml <- get(paste0("res_full_DMpb_c","00"))
+cd8List <- rownames(DMPBemmreml)
+DMPBemmreml <- get(paste0("res_full_DMpb_c","14"))
+cd4List <- rownames(DMPBemmreml)
+DMPBemmreml <- get(paste0("res_full_DMpb_c","02"))
+nkList <- rownames(DMPBemmreml)
+
+MyVenn <- venneuler(c(A=length(cd8List),
+                    B=length(cd4List),
+                    C=length(nkList),
+                    "A&B"=length(intersect(cd8List,cd4List)),
+                    "B&C"=length(intersect(nkList,cd4List)),
+                    "A&C"=length(intersect(cd8List,nkList)),
+                    "A&B&C"=length(intersect(intersect(cd8List,cd4List),nkList))))
+MyVenn$labels <- c(paste0("cd8\n",length(cd8List)),
+                   paste0("cd4\n",length(cd4List)),
+                   paste0("nk\n",length(nkList)))
+#MyVenn$labels <- c("A\n22","B\n7","C\n5","D\n58")
+plot(MyVenn, main = paste0("tested genes"))
+
+
+
+## and for CD14 hi/lo
 
 ```
 
