@@ -1,0 +1,553 @@
+---
+title: "sgeVariance_DMpb"
+author: "c ryan"
+date: "1/29/2021"
+output: html_document
+---
+
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(limma)
+library(edgeR)
+library(EMMREML)
+library(cobs)
+library(cowplot)
+library(snakecase)
+library(stringr)
+library(qvalue)
+library(scales)
+library(reshape2)
+library(topGO)
+library(biomaRt)
+library(parallel)
+library(mashr)
+library(ggcorrplot)
+
+#others from GSEA?
+#library(cobs); library(parallel); library(doParallel)
+
+figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
+```
+
+load helpful functions
+```{r}
+perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
+  
+  pvals_index=which(colnames(input_df)==Pvals_col_name)
+  ro<-input_df[order(input_df[,pvals_index]),]
+  p_obs <- data.frame(pvalue=ro[,pvals_index])
+  p_vector<-matrix(as.matrix(perm_df),ncol=1)
+  p_vector=data.frame(p_vector[order(p_vector)])
+  
+  F<-p_obs[,1]
+  F_o<-p_obs[,1]
+  pi_hat<-p_obs[,1]
+  
+  j=1
+  observed<-length(p_obs[,1])
+  randoms<-length(p_vector[,1])
+  
+  for(i in 1:observed)
+  {
+    repeat
+    {
+      if((p_vector[j,1]<p_obs[i,1])&j<randoms){j<-j+1}else{break}
+    }
+    F[i]=i/observed
+    F_o[i]=(j-1)/randoms
+    if(F_o[i]<1){pi_hat[i]=(1-F[i])/(1-F_o[i])}else{pi_hat[i]=1}
+  }
+  tabla <-data.frame(pi_hat,pval=p_obs[,1])
+  
+  tabla[1,]=c(1,0)
+  last_percentile_average=mean(tabla$pi_hat[as.integer(min((length(tabla[,1])*0.99),(nrow(tabla)-1)):length(tabla[,1]))])
+  tabla[nrow(tabla),]=c(last_percentile_average,1)
+  constraint_matrix=as.matrix(data.frame(c(0,2),c(0,1),c(1,0)))
+  f_hat<-suppressWarnings(cobs(tabla$pval,tabla$pi_hat,constraint="convex",pointwise=constraint_matrix,maxiter=1000,print.warn=FALSE,print.mesg=FALSE))
+  
+  f_hat_serie=f_hat$fitted
+  pi_o=f_hat_serie[length(f_hat_serie)]
+  pi_o=min(pi_o,1)
+  pi_o=max(pi_o,0)
+  
+  Fdr_ST_perm=pi_o*F_o/F
+  
+  for(i in 1:length(p_obs[,1]))
+  {
+    Fdr_ST_perm[i]=pi_o*F_o[i]/F[i]
+    if(i>1)
+    {
+      for(j in 1:(i-1))
+      {
+        if(Fdr_ST_perm[i-j]>Fdr_ST_perm[i]){Fdr_ST_perm[i-j]=Fdr_ST_perm[i]}else{break}
+      }
+    }
+    if(Fdr_ST_perm[i]>1)  Fdr_ST_perm[i]=1
+  }
+  
+  fdrs_df <-data.frame(ro,q_ST_perm=Fdr_ST_perm)
+  rownames(fdrs_df)=rownames(ro)
+  colnames(fdrs_df)[ncol(fdrs_df)]=paste0("fdr_",name)
+  
+  return(fdrs_df)
+}
+
+
+plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model") {
+  #modelName <- "DMpb_model_AgAsym_c02"
+  #emmremlDF <- res_full_aggAsym_DMpb_c02
+  #folderName <- figDir
+  
+  nVars <- dim(emmremlDF)[2] / 3
+  
+  colNums <- (2 * nVars + 1) : (3 * nVars)
+  
+  for (c in colNums) {
+    ggplot() +
+      geom_histogram(aes(x = emmremlDF[,c]), bins = 100) +
+      xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName))
+    ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",str_replace(colnames(emmremlDF)[c],":","_"),".png"), width = 6, height = 4)
+  }
+}
+
+```
+
+
+
+```{r loop through clusters to model DMpb}
+
+for (cluster in c("00","14","02","05","06","07")) {
+  #cluster <- "01"
+  
+  sge_LPS_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_pbMean_matrix'))
+  sge_LPS_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_LPS_c',cluster,'_DMpb_matrix'))
+  
+  sge_NC_pbMean_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_pbMean_matrix'))
+  sge_NC_DMpb_matrix <- read.table(paste0('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_NC_c',cluster,'_DMpb_matrix'))
+  
+  ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
+  numberNAs <- vector()
+  
+  for (r in 1:dim(sge_NC_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_NC_DMpb_matrix[r,]))
+  }
+  sge_NC_DMpb_matrix <- sge_NC_DMpb_matrix[numberNAs < 1,]
+  
+  numberNAs <- vector()
+  for (r in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_LPS_DMpb_matrix[r,]))
+  }
+  sge_LPS_DMpb_matrix <- sge_LPS_DMpb_matrix[numberNAs < 1,]
+  
+  
+  ## only use common set of genes - must exist in all matrices (8)
+  geneList <- rownames(table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix)
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))) == 4]
+  
+  geneList <- geneList[geneList != "chrMT"]
+
+  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+  
+  for (fObj in apropos("^sge_[NL][CP]")) {
+    tmpObj <- get(fObj)
+    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+    
+    ## fix MO - 77_06 ID
+    if (sum(colnames(tmpObj) == "X77_06") > 0) {
+      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    }
+    #sort the columns by ID to match metadata
+    tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    
+    #reassign the temp object to the sge_NC, etc
+    assign(x = fObj, value = tmpObj)
+  }
+  
+  
+  ## generate a dataframe of NC and LPS combined ##
+  sge_DM_matrix_nested <- merge(sge_NC_DM_matrix,sge_LPS_DM_matrix, by=0)
+  rownames(sge_DM_matrix_nested) <- sge_DM_matrix_nested$Row.names
+  sge_DM_matrix_nested$Row.names <- NULL
+  
+  #one for pbMeans as well
+  sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+  rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+  sge_pbMean_matrix_nested$Row.names <- NULL
+  
+  #and raw means and variances to use in the variance model
+  sge_mean_matrix_nested <- merge(sge_NC_mean_matrix,sge_LPS_mean_matrix, by=0)
+  rownames(sge_mean_matrix_nested) <- sge_mean_matrix_nested$Row.names
+  sge_mean_matrix_nested$Row.names <- NULL
+  
+  sge_var_matrix_nested <- merge(sge_NC_var_matrix,sge_LPS_var_matrix, by=0)
+  rownames(sge_var_matrix_nested) <- sge_var_matrix_nested$Row.names
+  sge_var_matrix_nested$Row.names <- NULL
+  
+  sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
+  rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
+  sge_DMpb_matrix_nested$Row.names <- NULL
+  
+  
+  indIDs <- colnames(sge_NC_DM_matrix)
+
+  #pick metadata based on samples in the matrix
+  
+  ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
+  ## get some metadata ##
+  metadata <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/sge_metadata_matrix', header = T) # this files is also in SGE_DM/dataFiles
+  metadata[1,1] <- 'Mo'
+  metadata <- metadata[order(metadata$ID),]
+  
+  metadata <- metadata[metadata$ID %in% indIDs,]
+  
+  ## make sure metadata order matches data frames ##
+  all.equal(metadata$ID,colnames(sge_NC_DM_matrix))
+  
+  ## double the metadata so it includes both NC and LPS ##
+  metadata <- rbind(metadata,metadata)
+  metadata$trt <- rep(c('NC','LPS'), times=c(length(indIDs),length(indIDs)))
+  
+  ## run a nested model with trt, and age and elo nested within trt ##
+  ## elo and age have to be mean centered for nested model ##
+  metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
+  #metadata$elo_centered <- metadata$elo - mean(metadata$elo)
+  metadata$age_centered <- scale(metadata$age, center = T, scale = F)
+  #metadata$age_centered <- metadata$age - mean(metadata$age)
+  
+  behaveData <- read.table("~/Dropbox (Personal)/scRNA/SGE_DM/data/SGEII_METADATA_MASTER.txt", header = T)
+  
+  #phase 1 only
+  behaveData <- subset(behaveData, phase == 1)
+  
+  #animals we need data for
+  # behave data is 2 character upper, genomic data is 4 char upper/lower
+  needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
+  
+  #limit behavioral data to correct 45 individs
+  behaveData <- subset(behaveData, ID %in% needIDs)
+  
+  #sort by ID
+  behaveData <- behaveData[order(behaveData$ID),]
+  
+  #match size of metadata object, repeats for NC & LPS
+  behaveData <- rbind(behaveData,behaveData)
+  
+  #get the important variables, centered
+  metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
+  metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
+  metadata$groom_cent <- behaveData$gc.overall.groom
+  
+  ## regress out group effects from DM ##
+  design <- model.matrix(~metadata$group)
+  fit <-lmFit(sge_DM_matrix_nested,design)
+  intercepts=data.frame(eBayes(fit))[,1]
+  resid_DM=apply(residuals.MArrayLM(object=fit, sge_DM_matrix_nested),2,function(x){x+intercepts})
+  
+  ## regress out group effects from DMpb ##
+  design <- model.matrix(~metadata$group)
+  fit <-lmFit(sge_DMpb_matrix_nested,design)
+  intercepts=data.frame(eBayes(fit))[,1]
+  resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
+  
+  ## regress out group effects from pbMean ##
+  design <- model.matrix(~metadata$group)
+  fit <-lmFit(sge_pbMean_matrix_nested,design)
+  intercepts=data.frame(eBayes(fit))[,1]
+  resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
+  
+  
+  #Variance v pbMean instead of raw mean
+  
+  p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_var_matrix[,1])) +
+    geom_point(alpha=0.5) +
+    ylim(0,250) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    xlab('mean ge - individual 1') +
+    ylab('variance in gene expression - individual 1') +
+    theme_minimal()
+  p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_var_matrix[,2])) +
+    geom_point(alpha=0.5) +
+    ylim(0,250) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    xlab('mean ge - individual 2') +
+    ylab('variance in gene expression - individual 2') +
+    theme_minimal()
+  p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_var_matrix[,3])) +
+    geom_point(alpha=0.5) +
+    ylim(0,250) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    xlab('mean ge - individual 3') +
+    ylab('variance in gene expression - individual 3') +
+    theme_minimal()
+  
+  plot_grid(p1,p2,p3, ncol = 3)
+  ggsave(paste0(figDir,"c",cluster,"/","var_v_pbMean_ge__by_individual_yLim250_c",cluster,".png"))
+  
+  #DM v pbMean
+  
+  p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DM_matrix[,1])) +
+    geom_point(alpha=0.5) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black') +
+    xlab('mean ge - individual 1') +
+    ylab('DM - individual 1') +
+    theme_minimal()
+  p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DM_matrix[,2])) +
+    geom_point(alpha=0.5) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black') +
+    xlab('mean ge - individual 2') +
+    ylab('DM - individual 2') +
+    theme_minimal()
+  p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DM_matrix[,3])) +
+    geom_point(alpha=0.5) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black') +
+    xlab('mean ge - individual 3') +
+    ylab('DM - individual 3') +
+    theme_minimal()
+  
+  plot_grid(p1,p2,p3, ncol = 3)
+  ggsave(paste0(figDir,"c",cluster,"/","DM_v_pbMean_ge__by_individual_c",cluster,".png"))
+  
+  #v pbMean instead of raw mean
+  
+  p1 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,1],sge_NC_DM_matrix[,1])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,1000) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    ylab('DM - individual 1') +
+    xlab('DM from pbMean - individual 1') +
+    theme_minimal()
+  p2 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,2],sge_NC_DM_matrix[,2])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,1000) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    ylab('DM - individual 2') +
+    xlab('DM from pbMean - individual 2') +
+    theme_minimal()
+  p3 <- ggplot(sge_NC_DMpb_matrix, aes(sge_NC_DMpb_matrix[,3],sge_NC_DM_matrix[,3])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,1000) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    ylab('DM - individual 3') +
+    xlab('DM from pbMean - individual 3') +
+    theme_minimal()
+  
+  plot_grid(p1,p2,p3, ncol = 3)
+  ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_DM_ge__by_individual_noLim_c",cluster,".png"))
+  
+  
+  #var v DM
+  p1 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,1],sge_NC_DM_matrix[,1])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,1000) +
+    xlim(0,250) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    ylab('DM - individual 1') +
+    xlab('var - individual 1') +
+    theme_minimal()
+  p2 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,2],sge_NC_DM_matrix[,2])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,1000) +
+    xlim(0,250) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    ylab('DM - individual 2') +
+    xlab('var - individual 2') +
+    theme_minimal()
+  p3 <- ggplot(sge_NC_var_matrix, aes(sge_NC_var_matrix[,3],sge_NC_DM_matrix[,3])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,1000) +
+    xlim(0,250) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    ylab('DM - individual 3') +
+    xlab('var - individual 3') +
+    theme_minimal()
+  
+  plot_grid(p1,p2,p3, ncol = 3)
+  ggsave(paste0(figDir,"c",cluster,"/","var_v_DM_ge__by_individual_xLim250_c",cluster,".png"))
+  
+  ###### Fit an elo model for each gene using emmreml
+  
+  ### modeling DMpb
+  
+  ###### Fit an elo model for each gene using emmreml to DM pseudobulk
+  
+  design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
+  
+  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+  res_full=resid_DMpb[,1:(3*ncol(design))]
+  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+  
+  #Declare object random_effects to store in it the individual-wise u random effects
+  random_effects=resid_DMpb[,1:length(indIDs)]
+  colnames(random_effects)=metadata[1:length(indIDs),'ID']
+  
+  #Define matrix Z describing the sample-to-individual mapping
+  K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+  # correcting capitalization so it matches
+  rownames(K)[34] <- 'JE11'
+  colnames(K)[34] <- 'JE11'
+  K=K[unique(metadata$ID),unique(metadata$ID)]
+  
+  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+  rownames(Z)=metadata$ID
+  colnames(Z)=colnames(K)
+  for(i in 1:ncol(Z)){
+    set=which(metadata$ID == colnames(Z)[i])
+    Z[set,i]=1
+  }
+  
+  for(i in 1:nrow(resid_DMpb))
+  {
+    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+    random_effects[i,]=t(emma$uhat)
+    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+  }
+  
+  assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
+  
+  plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
+  
+  ######Now the other behavioral metrics
+  ######agAsymm | AgRec | Groom
+  
+  #Agonism Asymmetry
+  design = model.matrix(~trt+trt:aggAsymm_cent + trt:age_centered, data=metadata)
+  
+  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+  res_full=resid_DMpb[,1:(3*ncol(design))]
+  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+  
+  #Declare object random_effects to store in it the individual-wise u random effects
+  random_effects=resid_DMpb[,1:length(indIDs)]
+  colnames(random_effects)=metadata[1:length(indIDs),'ID']
+  
+  #Define matrix Z describing the sample-to-individual mapping
+  K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+  # correcting capitalization so it matches
+  rownames(K)[34] <- 'JE11'
+  colnames(K)[34] <- 'JE11'
+  K=K[unique(metadata$ID),unique(metadata$ID)]
+  
+  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+  rownames(Z)=metadata$ID
+  colnames(Z)=colnames(K)
+  for(i in 1:ncol(Z)){
+    set=which(metadata$ID == colnames(Z)[i])
+    Z[set,i]=1
+  }
+  
+  for(i in 1:nrow(resid_DMpb))
+  {
+    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+    random_effects[i,]=t(emma$uhat)
+    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+  }
+  
+  assign(value = data.frame(res_full), x = paste0("res_full_aggAsym_DMpb_c",cluster))
+  plotModelHists(get(paste0("res_full_aggAsym_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgAsym_c",cluster))
+  
+  
+  #Agonism Received
+  design = model.matrix(~trt+trt:aggRec_cent + trt:age_centered, data=metadata)
+  
+  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+  res_full=resid_DMpb[,1:(3*ncol(design))]
+  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+  
+  #Declare object random_effects to store in it the individual-wise u random effects
+  random_effects=resid_DMpb[,1:length(indIDs)]
+  colnames(random_effects)=metadata[1:length(indIDs),'ID']
+  
+  #Define matrix Z describing the sample-to-individual mapping
+  K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+  # correcting capitalization so it matches
+  rownames(K)[34] <- 'JE11'
+  colnames(K)[34] <- 'JE11'
+  K=K[unique(metadata$ID),unique(metadata$ID)]
+  
+  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+  rownames(Z)=metadata$ID
+  colnames(Z)=colnames(K)
+  for(i in 1:ncol(Z)){
+    set=which(metadata$ID == colnames(Z)[i])
+    Z[set,i]=1
+  }
+  
+  for(i in 1:nrow(resid_DMpb))
+  {
+    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+    random_effects[i,]=t(emma$uhat)
+    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+  }
+  
+  assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpb_c",cluster))
+  plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
+  
+  #Overall Grooming
+  
+  design = model.matrix(~trt+trt:groom_cent + trt:age_centered, data=metadata)
+  
+  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+  res_full=resid_DMpb[,1:(3*ncol(design))]
+  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+  
+  #Declare object random_effects to store in it the individual-wise u random effects
+  random_effects=resid_DMpb[,1:length(indIDs)]
+  colnames(random_effects)=metadata[1:length(indIDs),'ID']
+  
+  #Define matrix Z describing the sample-to-individual mapping
+  K <- read.table('~/Dropbox (Personal)/scRNA/SGE_DM/data/SGE2kinshipmatrix.txt')
+  # correcting capitalization so it matches
+  rownames(K)[34] <- 'JE11'
+  colnames(K)[34] <- 'JE11'
+  K=K[unique(metadata$ID),unique(metadata$ID)]
+  
+  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+  rownames(Z)=metadata$ID
+  colnames(Z)=colnames(K)
+  for(i in 1:ncol(Z)){
+    set=which(metadata$ID == colnames(Z)[i])
+    Z[set,i]=1
+  }
+  
+  for(i in 1:nrow(resid_DMpb))
+  {
+    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+    random_effects[i,]=t(emma$uhat)
+    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+  }
+  
+  assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
+  plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
+  
+
+  ######data validation possibilities
+  ######are genes that are upregulated in LPS also higher variance in LPS?
+  ###### obtain directly from Paul's data instead
+}
+
+```
