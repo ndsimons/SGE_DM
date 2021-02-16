@@ -3,6 +3,8 @@
 .libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", .libPaths() ) )
 workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
 
+args <- commandArgs(trailingOnly = TRUE)
+print(args)
 
 library(ggplot2)
 library(limma)
@@ -21,10 +23,13 @@ library(reshape2)
 #library(mashr)
 #library(ggcorrplot)
 
-nCluster <- 1
+nCluster <- as.numeric(args)
 
-figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
-workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
+print(nCluster)
+
+figDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/figures/"
+workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
+
 
 perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
@@ -181,7 +186,9 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   ## get some metadata ##
   metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
   # this file is also in SGE_DM/dataFiles
-  metadata[1,1] <- 'Mo'
+  metadata$ID <- as.character(metadata$ID)
+  metadata[1,1] <- "Mo"
+  
   metadata <- metadata[order(metadata$ID),]
   
   metadata <- metadata[metadata$ID %in% indIDs,]
@@ -265,7 +272,7 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
     theme_minimal()
   
   plot_grid(p1,p2,p3, ncol = 3)
-  ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
+  #ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
   
   
   ###### Fit an elo model for each gene using emmreml
@@ -309,7 +316,7 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   
   assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
   
-  plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
+  #plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
   
   ######Now the other behavioral metrics
   ######agAsymm | AgRec | Groom
@@ -351,7 +358,7 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   }
   
   assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpb_c",cluster))
-  plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
+  #plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
   
   #Overall Grooming
   
@@ -390,7 +397,7 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   }
   
   assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
-  plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
+  #plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
   
   ## Permutations for emprirical null ##
   ################################################################################################################################
