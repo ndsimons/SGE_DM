@@ -1,12 +1,9 @@
----
-title: "sgeVariance_DMpb"
-author: "c ryan"
-date: "1/29/2021"
-output: html_document
----
+
+## Load packages ##
+.libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", .libPaths() ) )
+workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
 
 
-```{r packages, include=FALSE}
 library(ggplot2)
 library(limma)
 library(edgeR)
@@ -24,15 +21,11 @@ library(parallel)
 library(mashr)
 library(ggcorrplot)
 
-#others from GSEA?
-#library(cobs); library(parallel); library(doParallel)
+nCluster <- 1
 
 figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
-```
 
-load helpful functions
-```{r}
 perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
   pvals_index=which(colnames(input_df)==Pvals_col_name)
@@ -112,16 +105,11 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
   }
 }
 
-```
-
-
-
-```{r loop through clusters to model DMpb}
 #number of permutations
-iters <- 50
+iters <- 100
 
 #only run cluster 7 as a test
-for (cluster in c("00","14","02","05","06","07")[6]) {
+for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   #cluster <- "07"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
@@ -147,15 +135,15 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
   
   ## only use common set of genes - must exist in all matrices (8)
   geneList <- rownames(table(c(rownames(sge_NC_pbMean_matrix),
-              rownames(sge_NC_DMpb_matrix),
-              rownames(sge_LPS_pbMean_matrix),
-              rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
-              rownames(sge_NC_DMpb_matrix),
-              rownames(sge_LPS_pbMean_matrix),
-              rownames(sge_LPS_DMpb_matrix))) == 4]
+                               rownames(sge_NC_DMpb_matrix),
+                               rownames(sge_LPS_pbMean_matrix),
+                               rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
+                                                                        rownames(sge_NC_DMpb_matrix),
+                                                                        rownames(sge_LPS_pbMean_matrix),
+                                                                        rownames(sge_LPS_DMpb_matrix))) == 4]
   
   geneList <- geneList[geneList != "chrMT"]
-
+  
   #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
   
   for (fObj in apropos("^sge_[NL][CP]")) {
@@ -186,7 +174,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
   sge_DMpb_matrix_nested$Row.names <- NULL
   
   indIDs <- colnames(sge_NC_DMpb_matrix)
-
+  
   #pick metadata based on samples in the matrix
   
   ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
@@ -325,7 +313,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
   
   ######Now the other behavioral metrics
   ######agAsymm | AgRec | Groom
-
+  
   
   #Agonism Received
   design = model.matrix(~trt+trt:aggRec_cent + trt:age_centered, data=metadata)
@@ -403,7 +391,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
   
   assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
   plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
-
+  
   ## Permutations for emprirical null ##
   ################################################################################################################################
   ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
@@ -411,7 +399,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
   
   #go through each of the 3 models (elo, agRec, groom) and generate a null
   for (model in c("elo","agRec","groom")) {
-  
+    
     #generate N sets of pvalues
     for(iter in 1:iters) {
       
@@ -426,7 +414,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
       metaRandLPS$trt <- ifelse(metaRandLPS$trt == "NC", "LPS", "NC")
       
       metaRandTrt <- rbind(metaRandTrt,metaRandLPS)
-
+      
       #randomize behavioral variable
       if ( model == "elo" ) {
         varCol <- 6
@@ -495,7 +483,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
         random_effects[i,]=t(emma$uhat)
         res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
       }
-        
+      
       #we register p-values of the associations to treatment
       if( iter == 1 ) {
         shuffled_elo_trt_pvals <- data.frame(x=res_null[,"p_value_trtLPS"])
@@ -537,7 +525,7 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
         random_effects[i,]=t(emma$uhat)
         res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
       }
-        
+      
       #we register p-values of the associations of the behavior at NC and at LPS alone.
       if( iter == 1 ) {
         shuffled_elos_pvals_NC <- data.frame(x=res_null[,15])
@@ -572,33 +560,22 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
       write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_agRec_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
       write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_agRec_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
       write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_agRec_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-
+      
     } else {
       emmremlResults <- get(paste0("res_full_groom_DMpb_c",cluster))
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","groomTrt")
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.groom_cent","groomNestNC")
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.groom_cent","groomNestLPS")
       assign(value = emmremlResults, x = paste0("res_full_groom_DMpb_c",cluster))
-
+      
       write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_groom_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
       write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_groom_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
       write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_groom_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-
+      
     }
-
+    
     
   }
   
   
 }
-
-```
-
-```{r}
-res_fullDF <- perm.fdr(res_full_DMpb_c07,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNC")
-
-res_fullDF <- perm.fdr(res_full_DMpb_c07,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
-
-res_fullDF <- perm.fdr(res_full_DMpb_c07,shuffled_elo_trt_pvals,"p_value_trtLPS","eloTrt")
-```
-
