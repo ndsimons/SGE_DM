@@ -117,7 +117,7 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")[nCluster]) {
-  #cluster <- "07"
+  #cluster <- "02"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))

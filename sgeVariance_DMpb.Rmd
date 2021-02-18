@@ -634,11 +634,163 @@ for (cluster in c("00","14","02","05","06","07")) {
 
 ```
 
+
+
 ```{r}
-res_fullDF <- perm.fdr(res_full_DMpb_c07,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNC")
+plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model", 
+                           behaveMetric = "behavior", cluster = "99") {
+  modelName <- "DMpb_model_c02"
+  behaveMetric <- "elo"
+  cluster <- "02"
+  emmremlDF <- res_full_aggRec_DMpb_c02
+  folderName <- figDir
+  
+  nVars <- (dim(emmremlDF)[2] - 3)/ 3
+  
+  colNums <- (2 * nVars + 1) : (3 * nVars)
+  
+  for (c in colNums) {
+    ggplot() +
+      geom_histogram(aes(x = emmremlDF[,c]), bins = 100) +
+      xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName))
+    ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",
+                  str_replace(colnames(emmremlDF)[c],":","_"),".png"), width = 6, height = 4)
+    
+    if ( c %in% c(14,15,16) ) {
+      if ( c == 14 ) {
+        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_trt_pval_c",cluster)))
+      } else if ( c == 15 ) {
+        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_NC_pval_c",cluster)))
+      } else {
+        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_LPS_pval_c",cluster)))
+      }
+      
+      ggplot() +
+        geom_histogram(aes(x = emmremlDF[,c], y = ..count..), alpha = 2/3, bins = 100) +
+        geom_histogram(aes(x = unlist(permutations), y = ..count.. / iters), alpha = 1/3, fill = "red", bins = 100) +
+        xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName), subtitle = paste0(iters," permutations"))
+      ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",
+                    str_replace(colnames(emmremlDF)[c],":","_"),"_wPerms.png"), width = 6, height = 4)
+    }
+  }
+}
 
-res_fullDF <- perm.fdr(res_full_DMpb_c07,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloLPS")
+for (b in c("elo","agRec","groom")) {
+  for (c in c("00","14","02","05","06","07")) {
+    
+    if (b == "elo") {
+      emmremlOutput <- get(paste0("res_full_DMpb_c",c))
+    } else if (b == "agRec") {
+      emmremlOutput <- get(paste0("res_full_aggRec_DMpb_c",c))
+    } else {
+      emmremlOutput <- get(paste0("res_full_groom_DMpb_c",c))
+    }
+    
+    plotModelHists(emmremlDF = emmremlOutput, 
+                   folderName = paste0(figDir,"c",c,"/"), 
+                   modelName = paste0(b,"_model_c",c),
+                   cluster = c,
+                   behaveMetric = b)
+  }
+}
 
-res_fullDF <- perm.fdr(res_full_DMpb_c07,shuffled_elo_trt_pvals,"p_value_trtLPS","eloTrt")
+
+```
+
+
+```{r cell type metadata}
+clusterCellID <- as.data.frame(c("00","14","02","05","06","07"))
+
+colnames(clusterCellID) <- "cluster"
+
+clusterCellID$cellData <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_elo_nperms_100.RDS",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_elo_nperms_100.RDS")
+
+clusterCellID$cellID <- c("CD8A",
+                          "CD4",
+                          "NK",
+                          "Bcells",
+                          "CD14hi",
+                          "CD14low")
+
+```
+
+
+```{r how many genes are significant}
+
+#in clusters 00 -> 07
+#how many pass fdr of .01, .05, .10
+#treatment
+#LPS:elo
+
+FDRs <- c(.01,.05,.1,.2)
+
+trtFDR <- as.data.frame(clusterCellID$cluster)
+elotrtFDR <- as.data.frame(clusterCellID$cluster)
+agRectrtFDR <- as.data.frame(clusterCellID$cluster)
+groomtrtFDR <- as.data.frame(clusterCellID$cluster)
+eloncFDR <- as.data.frame(clusterCellID$cluster)
+agRecncFDR <- as.data.frame(clusterCellID$cluster)
+groomncFDR <- as.data.frame(clusterCellID$cluster)
+
+colnames(trtFDR) <- colnames(elotrtFDR) <- colnames(agRectrtFDR) <- colnames(groomtrtFDR) <- "cluster"
+colnames(eloncFDR) <- colnames(agRecncFDR) <- colnames(groomncFDR) <- "cluster"
+
+trtFDR$nGenes <- trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
+elotrtFDR$nGenes <- elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
+agRectrtFDR$nGenes <- agRectrtFDR$fdr20 <- agRectrtFDR$fdr10 <- agRectrtFDR$fdr05 <- agRectrtFDR$fdr01 <- 0
+groomtrtFDR$nGenes <- groomtrtFDR$fdr20 <- groomtrtFDR$fdr10 <- groomtrtFDR$fdr05 <- groomtrtFDR$fdr01 <- 0
+eloncFDR$nGenes <- eloncFDR$fdr20 <- eloncFDR$fdr10 <- eloncFDR$fdr05 <- eloncFDR$fdr01 <- 0
+agRecncFDR$nGenes <- agRecncFDR$fdr20 <- agRecncFDR$fdr10 <- agRecncFDR$fdr05 <- agRecncFDR$fdr01 <- 0
+groomncFDR$nGenes <- groomncFDR$fdr20 <- groomncFDR$fdr10 <- groomncFDR$fdr05 <- groomncFDR$fdr01 <- 0
+
+
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  
+  cellID <- clusterCellID$cellID[c]
+  
+  for (f in FDRs) {
+    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+    trtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloTrt < f)
+    elotrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestLPS < f)
+    eloncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestNC < f)
+    trtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    elotrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    eloncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+    agRectrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestLPS < f)
+    agRecncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestNC < f)
+    agRectrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    agRecncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+    groomtrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestLPS < f)
+    groomncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestNC < f)
+    groomtrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    groomncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+
+  }
+  
+}
+
+write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, sep = ",")
+write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(agRectrtFDR, file = paste0(workDir,"agRecTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(groomtrtFDR, file = paste0(workDir,"groomTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(elotrtFDR, file = paste0(workDir,"eloncFDRcounts.txt"), quote = F, sep = ",")
+write.table(agRectrtFDR, file = paste0(workDir,"agRecncFDRcounts.txt"), quote = F, sep = ",")
+write.table(groomtrtFDR, file = paste0(workDir,"groomncFDRcounts.txt"), quote = F, sep = ",")
+
+```
+
+
+```{r genes with significant treatment betas}
+
 ```
 
