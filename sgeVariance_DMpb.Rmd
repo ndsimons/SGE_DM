@@ -118,11 +118,11 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
 
 ```{r loop through clusters to model DMpb}
 #number of permutations
-iters <- 50
+iters <- 100
 
 #only run cluster 7 as a test
-for (cluster in c("00","14","02","05","06","07")[6]) {
-  #cluster <- "07"
+for (cluster in c("00","14","02","05","06","07")) {
+  #cluster <- "14"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
@@ -238,357 +238,397 @@ for (cluster in c("00","14","02","05","06","07")[6]) {
   #flip factors in metadata
   metadata$trt <- factor(metadata$trt, levels = c("NC","LPS"))
   
-  ## regress out group effects from DMpb ##
-  design <- model.matrix(~metadata$group)
-  fit <-lmFit(sge_DMpb_matrix_nested,design)
-  intercepts=data.frame(eBayes(fit))[,1]
-  resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
   
-  ## regress out group effects from pbMean ##
-  design <- model.matrix(~metadata$group)
-  fit <-lmFit(sge_pbMean_matrix_nested,design)
-  intercepts=data.frame(eBayes(fit))[,1]
-  resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
+  #have run this up on the cluster, check for those files and skip if they've been made
+  #list.files(path = paste0(workDir,"cluster/permutations/"))
+  sgeOutput <- list.files(path = paste0(workDir,"cluster/results/"))
+  clustResults <- c(paste0("results_c",cluster,"_agRec_emmreml"),
+                    paste0("results_c",cluster,"_elo_emmreml"),
+                    paste0("results_c",cluster,"_groom_emmreml"))
   
-  #DMpb v pbMean instead of raw mean
-  p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpb_matrix[,1])) +
-    geom_point(alpha=0.5) +
-    #ylim(0,250) +
-    #xlim(0,50) +
-    stat_smooth(method='lm', color='black', fullrange = T) +
-    xlab('mean ge - individual 1') +
-    ylab('variance in gene expression - individual 1') +
-    theme_minimal()
-  p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DMpb_matrix[,2])) +
-    geom_point(alpha=0.5) +
-    #ylim(0,250) +
-    #xlim(0,50) +
-    stat_smooth(method='lm', color='black', fullrange = T) +
-    xlab('mean ge - individual 2') +
-    ylab('variance in gene expression - individual 2') +
-    theme_minimal()
-  p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DMpb_matrix[,3])) +
-    geom_point(alpha=0.5) +
-    #ylim(0,250) +
-    #xlim(0,50) +
-    stat_smooth(method='lm', color='black', fullrange = T) +
-    xlab('mean ge - individual 3') +
-    ylab('variance in gene expression - individual 3') +
-    theme_minimal()
+  if ( sum(clustResults %in% sgeOutput) == 3 ) {
+    #data have been run on the cluster, just load the results
+    
+    #elo results
+    assign(x = paste0("res_full_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
+    
+    #agRec
+    assign(x = paste0("res_full_aggRec_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_agRec_emmreml")))
+    
+    #groom
+    assign(x = paste0("res_full_groom_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_groom_emmreml")))
+    
+    #permutations
+    fileID <- which(cluster == str_replace(str_replace(string = list.files(path = paste0(workDir,"cluster/permutations/")),
+                                                       pattern = ".*_c", replacement = ""),
+                                           pattern = ".txt", replacement = ""))
+    
+    for (f in list.files(path = paste0(workDir,"cluster/permutations/"))[fileID]) {
+      shufName <- str_replace(f, pattern = ".txt", replacement = "")
+      assign(x = shufName,
+             value = read.table(paste0(workDir,"cluster/permutations/",f), header = T))
+    }
+    
+  } else {
+    #need to run the loop locally
   
-  plot_grid(p1,p2,p3, ncol = 3)
-  ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
+    ## regress out group effects from DMpb ##
+    design <- model.matrix(~metadata$group)
+    fit <-lmFit(sge_DMpb_matrix_nested,design)
+    intercepts=data.frame(eBayes(fit))[,1]
+    resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
+    
+    ## regress out group effects from pbMean ##
+    design <- model.matrix(~metadata$group)
+    fit <-lmFit(sge_pbMean_matrix_nested,design)
+    intercepts=data.frame(eBayes(fit))[,1]
+    resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
+    
+    #DMpb v pbMean instead of raw mean
+    p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpb_matrix[,1])) +
+      geom_point(alpha=0.5) +
+      #ylim(0,250) +
+      #xlim(0,50) +
+      stat_smooth(method='lm', color='black', fullrange = T) +
+      xlab('mean ge - individual 1') +
+      ylab('variance in gene expression - individual 1') +
+      theme_minimal()
+    p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DMpb_matrix[,2])) +
+      geom_point(alpha=0.5) +
+      #ylim(0,250) +
+      #xlim(0,50) +
+      stat_smooth(method='lm', color='black', fullrange = T) +
+      xlab('mean ge - individual 2') +
+      ylab('variance in gene expression - individual 2') +
+      theme_minimal()
+    p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DMpb_matrix[,3])) +
+      geom_point(alpha=0.5) +
+      #ylim(0,250) +
+      #xlim(0,50) +
+      stat_smooth(method='lm', color='black', fullrange = T) +
+      xlab('mean ge - individual 3') +
+      ylab('variance in gene expression - individual 3') +
+      theme_minimal()
+    
+    plot_grid(p1,p2,p3, ncol = 3)
+    ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
+    
+    
+    ###### Fit an elo model for each gene using emmreml
+    
+    ### modeling DMpb
+    ###### Fit an elo model for each gene using emmreml to DM pseudobulk
+    
+    design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
+    
+    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+    res_full=resid_DMpb[,1:(3*ncol(design))]
+    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+    
+    #Declare object random_effects to store in it the individual-wise u random effects
+    random_effects=resid_DMpb[,1:length(indIDs)]
+    colnames(random_effects)=metadata[1:length(indIDs),'ID']
+    
+    #Define matrix Z describing the sample-to-individual mapping
+    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+    # correcting capitalization so it matches
+    rownames(K)[34] <- 'JE11'
+    colnames(K)[34] <- 'JE11'
+    K=K[unique(metadata$ID),unique(metadata$ID)]
+    
+    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+    rownames(Z)=metadata$ID
+    colnames(Z)=colnames(K)
+    for(i in 1:ncol(Z)){
+      set=which(metadata$ID == colnames(Z)[i])
+      Z[set,i]=1
+    }
+    
+    for(i in 1:nrow(resid_DMpb))
+    {
+      emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+      random_effects[i,]=t(emma$uhat)
+      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+    }
+    
+    assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
+    
+    plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
+    
+    ######Now the other behavioral metrics
+    ######agAsymm | AgRec | Groom
   
+    
+    #Agonism Received
+    design = model.matrix(~trt+trt:aggRec_cent + trt:age_centered, data=metadata)
+    
+    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+    res_full=resid_DMpb[,1:(3*ncol(design))]
+    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+    
+    #Declare object random_effects to store in it the individual-wise u random effects
+    random_effects=resid_DMpb[,1:length(indIDs)]
+    colnames(random_effects)=metadata[1:length(indIDs),'ID']
+    
+    #Define matrix Z describing the sample-to-individual mapping
+    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+    # correcting capitalization so it matches
+    rownames(K)[34] <- 'JE11'
+    colnames(K)[34] <- 'JE11'
+    K=K[unique(metadata$ID),unique(metadata$ID)]
+    
+    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+    rownames(Z)=metadata$ID
+    colnames(Z)=colnames(K)
+    for(i in 1:ncol(Z)){
+      set=which(metadata$ID == colnames(Z)[i])
+      Z[set,i]=1
+    }
+    
+    for(i in 1:nrow(resid_DMpb))
+    {
+      emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+      random_effects[i,]=t(emma$uhat)
+      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+    }
+    
+    assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpb_c",cluster))
+    plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
+    
+    #Overall Grooming
+    
+    design = model.matrix(~trt+trt:groom_cent + trt:age_centered, data=metadata)
+    
+    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+    res_full=resid_DMpb[,1:(3*ncol(design))]
+    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+    
+    #Declare object random_effects to store in it the individual-wise u random effects
+    random_effects=resid_DMpb[,1:length(indIDs)]
+    colnames(random_effects)=metadata[1:length(indIDs),'ID']
+    
+    #Define matrix Z describing the sample-to-individual mapping
+    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+    # correcting capitalization so it matches
+    rownames(K)[34] <- 'JE11'
+    colnames(K)[34] <- 'JE11'
+    K=K[unique(metadata$ID),unique(metadata$ID)]
+    
+    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+    rownames(Z)=metadata$ID
+    colnames(Z)=colnames(K)
+    for(i in 1:ncol(Z)){
+      set=which(metadata$ID == colnames(Z)[i])
+      Z[set,i]=1
+    }
+    
+    for(i in 1:nrow(resid_DMpb))
+    {
+      emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+      random_effects[i,]=t(emma$uhat)
+      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+    }
+    
+    assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
+    plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
   
-  ###### Fit an elo model for each gene using emmreml
+    ## Permutations for emprirical null ##
+    ################################################################################################################################
+    ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
+    ################################################################################################################################
+    
+    #go through each of the 3 models (elo, agRec, groom) and generate a null
+    for (model in c("elo","agRec","groom")) {
+    
+      #generate N sets of pvalues
+      for(iter in 1:iters) {
+        
+        #randomize treatment
+        #first for the NC samples
+        metaRandTrt <- subset(metadata, trt == "NC")
+        #pick from a list of 50:50 NC:LPS
+        metaRandTrt$trt <- sample(metadata$trt)[1:length(metaRandTrt$trt)]
+        
+        #duplicate the data, but flip the NC/LPS
+        metaRandLPS <- metaRandTrt
+        metaRandLPS$trt <- ifelse(metaRandLPS$trt == "NC", "LPS", "NC")
+        
+        metaRandTrt <- rbind(metaRandTrt,metaRandLPS)
   
-  ### modeling DMpb
-  ###### Fit an elo model for each gene using emmreml to DM pseudobulk
-  
-  design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
-  
-  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
-  res_full=resid_DMpb[,1:(3*ncol(design))]
-  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
-  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
-  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
-  
-  #Declare object random_effects to store in it the individual-wise u random effects
-  random_effects=resid_DMpb[,1:length(indIDs)]
-  colnames(random_effects)=metadata[1:length(indIDs),'ID']
-  
-  #Define matrix Z describing the sample-to-individual mapping
-  K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-  # correcting capitalization so it matches
-  rownames(K)[34] <- 'JE11'
-  colnames(K)[34] <- 'JE11'
-  K=K[unique(metadata$ID),unique(metadata$ID)]
-  
-  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-  rownames(Z)=metadata$ID
-  colnames(Z)=colnames(K)
-  for(i in 1:ncol(Z)){
-    set=which(metadata$ID == colnames(Z)[i])
-    Z[set,i]=1
-  }
-  
-  for(i in 1:nrow(resid_DMpb))
-  {
-    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-    random_effects[i,]=t(emma$uhat)
-    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-  }
-  
-  assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
-  
-  plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
-  
-  ######Now the other behavioral metrics
-  ######agAsymm | AgRec | Groom
-
-  
-  #Agonism Received
-  design = model.matrix(~trt+trt:aggRec_cent + trt:age_centered, data=metadata)
-  
-  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
-  res_full=resid_DMpb[,1:(3*ncol(design))]
-  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
-  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
-  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
-  
-  #Declare object random_effects to store in it the individual-wise u random effects
-  random_effects=resid_DMpb[,1:length(indIDs)]
-  colnames(random_effects)=metadata[1:length(indIDs),'ID']
-  
-  #Define matrix Z describing the sample-to-individual mapping
-  K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-  # correcting capitalization so it matches
-  rownames(K)[34] <- 'JE11'
-  colnames(K)[34] <- 'JE11'
-  K=K[unique(metadata$ID),unique(metadata$ID)]
-  
-  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-  rownames(Z)=metadata$ID
-  colnames(Z)=colnames(K)
-  for(i in 1:ncol(Z)){
-    set=which(metadata$ID == colnames(Z)[i])
-    Z[set,i]=1
-  }
-  
-  for(i in 1:nrow(resid_DMpb))
-  {
-    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-    random_effects[i,]=t(emma$uhat)
-    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-  }
-  
-  assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpb_c",cluster))
-  plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
-  
-  #Overall Grooming
-  
-  design = model.matrix(~trt+trt:groom_cent + trt:age_centered, data=metadata)
-  
-  #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
-  res_full=resid_DMpb[,1:(3*ncol(design))]
-  colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
-  colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
-  colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
-  
-  #Declare object random_effects to store in it the individual-wise u random effects
-  random_effects=resid_DMpb[,1:length(indIDs)]
-  colnames(random_effects)=metadata[1:length(indIDs),'ID']
-  
-  #Define matrix Z describing the sample-to-individual mapping
-  K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-  # correcting capitalization so it matches
-  rownames(K)[34] <- 'JE11'
-  colnames(K)[34] <- 'JE11'
-  K=K[unique(metadata$ID),unique(metadata$ID)]
-  
-  Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-  rownames(Z)=metadata$ID
-  colnames(Z)=colnames(K)
-  for(i in 1:ncol(Z)){
-    set=which(metadata$ID == colnames(Z)[i])
-    Z[set,i]=1
-  }
-  
-  for(i in 1:nrow(resid_DMpb))
-  {
-    emma=emmreml(y=resid_DMpb[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-    random_effects[i,]=t(emma$uhat)
-    res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-  }
-  
-  assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
-  plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
-
-  ## Permutations for emprirical null ##
-  ################################################################################################################################
-  ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
-  ################################################################################################################################
-  
-  #go through each of the 3 models (elo, agRec, groom) and generate a null
-  for (model in c("elo","agRec","groom")) {
-  
-    #generate N sets of pvalues
-    for(iter in 1:iters) {
-      
-      #randomize treatment
-      #first for the NC samples
-      metaRandTrt <- subset(metadata, trt == "NC")
-      #pick from a list of 50:50 NC:LPS
-      metaRandTrt$trt <- sample(metadata$trt)[1:length(metaRandTrt$trt)]
-      
-      #duplicate the data, but flip the NC/LPS
-      metaRandLPS <- metaRandTrt
-      metaRandLPS$trt <- ifelse(metaRandLPS$trt == "NC", "LPS", "NC")
-      
-      metaRandTrt <- rbind(metaRandTrt,metaRandLPS)
-
-      #randomize behavioral variable
-      if ( model == "elo" ) {
-        varCol <- 6
-      } else if ( model == "agRec" ) {
-        varCol <- 9
-      } else {
-        varCol <- 10
+        #randomize behavioral variable
+        if ( model == "elo" ) {
+          varCol <- 6
+        } else if ( model == "agRec" ) {
+          varCol <- 9
+        } else {
+          varCol <- 10
+        }
+        
+        #Step 1 - pull out just the NC condition
+        metaRandVar <- subset(metadata, trt == "NC")
+        
+        #Step 2 - randomize behavoral variable
+        metaRandVar[,varCol] <- sample(metaRandVar[,varCol])
+        
+        #Step 3 - create the "LPS" metadata, e.g. the second half of the metadata table
+        #by repeating the table, but assigning the opposite treatment
+        metaRandLPS <- metaRandVar
+        metaRandLPS$trt <- "LPS"
+        
+        #Step 4 - bring them back together for a single metaRand object
+        metaRandVar <- rbind(metaRandVar,metaRandLPS)
+        
+        ###### Fit an elo model for each gene using emmreml to DM pseudobulk
+        if ( model == "elo") {
+          designVar <- model.matrix(~trt + trt:elo_centered + trt:age_centered, data=metaRandVar)
+          designTrt <- model.matrix(~trt + trt:elo_centered + trt:age_centered, data=metaRandTrt)
+        } else if ( model == "agRec" ) {
+          designVar <- model.matrix(~trt + trt:aggRec_cent + trt:age_centered, data=metaRandVar)
+          designTrt <- model.matrix(~trt + trt:aggRec_cent + trt:age_centered, data=metaRandTrt)
+        } else {
+          designVar <- model.matrix(~trt + trt:groom_cent + trt:age_centered, data=metaRandVar)
+          designTrt <- model.matrix(~trt + trt:groom_cent + trt:age_centered, data=metaRandTrt)
+        }
+        
+        ### Treatment Model
+        
+        #Declare object res_null to store in it the model results: beta coefficients, standard deviations and p values
+        res_null=resid_DMpb[,1:(3*ncol(designTrt))]
+        colnames(res_null)[1:ncol(designTrt)]=paste0("beta_",colnames(designTrt))
+        colnames(res_null)[(ncol(designTrt)+1):(2*ncol(designTrt))]=paste0("sdev_",colnames(designTrt))
+        colnames(res_null)[((2*ncol(designTrt))+1):(3*ncol(designTrt))]=paste0("p_value_",colnames(designTrt))
+        
+        #Declare object random_effects to store in it the individual-wise u random effects
+        random_effects=resid_DMpb[,1:length(indIDs)]
+        colnames(random_effects)=metadata[1:length(indIDs),'ID']
+        
+        #Define matrix Z describing the sample-to-individual mapping
+        K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+        # correcting capitalization so it matches
+        rownames(K)[34] <- 'JE11'
+        colnames(K)[34] <- 'JE11'
+        K=K[unique(metadata$ID),unique(metadata$ID)]
+        
+        Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+        rownames(Z)=metadata$ID
+        colnames(Z)=colnames(K)
+        for(i in 1:ncol(Z)){
+          set=which(metadata$ID == colnames(Z)[i])
+          Z[set,i]=1
+        }
+        
+        #Fit a model for each gene using emmreml
+        for(i in 1:nrow(resid_DMpb)) {
+          emma=emmreml(y=resid_DMpb[i,],X=designTrt,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+          random_effects[i,]=t(emma$uhat)
+          res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+        }
+          
+        #we register p-values of the associations to treatment
+        if( iter == 1 ) {
+          shuffled_elo_trt_pvals <- data.frame(x=res_null[,"p_value_trtLPS"])
+          rownames(shuffled_elo_trt_pvals) <- rownames(res_null)
+        } else {
+          shuffled_elo_trt_pvals <- cbind(shuffled_elo_trt_pvals,x=res_null[,"p_value_trtLPS"])
+        }
+        
+        ### Behavioral Variable Model
+        
+        #Declare object res_null to store in it the model results: beta coefficients, standard deviations and p values
+        res_null=resid_DMpb[,1:(3*ncol(designVar))]
+        colnames(res_null)[1:ncol(designVar)]=paste0("beta_",colnames(designVar))
+        colnames(res_null)[(ncol(designVar)+1):(2*ncol(designVar))]=paste0("sdev_",colnames(designVar))
+        colnames(res_null)[((2*ncol(designVar))+1):(3*ncol(designVar))]=paste0("p_value_",colnames(designVar))
+        
+        #Declare object random_effects to store in it the individual-wise u random effects
+        random_effects=resid_DMpb[,1:length(indIDs)]
+        colnames(random_effects)=metadata[1:length(indIDs),'ID']
+        
+        #Define matrix Z describing the sample-to-individual mapping
+        K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+        # correcting capitalization so it matches
+        rownames(K)[34] <- 'JE11'
+        colnames(K)[34] <- 'JE11'
+        K=K[unique(metadata$ID),unique(metadata$ID)]
+        
+        Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+        rownames(Z)=metadata$ID
+        colnames(Z)=colnames(K)
+        for(i in 1:ncol(Z)){
+          set=which(metadata$ID == colnames(Z)[i])
+          Z[set,i]=1
+        }
+        
+        #Fit a model for each gene using emmreml
+        for(i in 1:nrow(resid_DMpb)) {
+          emma=emmreml(y=resid_DMpb[i,],X=designVar,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+          random_effects[i,]=t(emma$uhat)
+          res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+        }
+          
+        #we register p-values of the associations of the behavior at NC and at LPS alone.
+        if( iter == 1 ) {
+          shuffled_elos_pvals_NC <- data.frame(x=res_null[,15])
+          shuffled_elos_pvals_LPS <- data.frame(x=res_null[,16])
+          rownames(shuffled_elos_pvals_NC) <- rownames(res_null)
+          rownames(shuffled_elos_pvals_LPS) <- rownames(res_null)
+        } else {
+          shuffled_elos_pvals_NC <- cbind(shuffled_elos_pvals_NC,x=res_null[,15])
+          shuffled_elos_pvals_LPS <- cbind(shuffled_elos_pvals_LPS,x=res_null[,16])
+        }
+        
       }
       
-      #Step 1 - pull out just the NC condition
-      metaRandVar <- subset(metadata, trt == "NC")
-      
-      #Step 2 - randomize behavoral variable
-      metaRandVar[,varCol] <- sample(metaRandVar[,varCol])
-      
-      #Step 3 - create the "LPS" metadata, e.g. the second half of the metadata table
-      #by repeating the table, but assigning the opposite treatment
-      metaRandLPS <- metaRandVar
-      metaRandLPS$trt <- "LPS"
-      
-      #Step 4 - bring them back together for a single metaRand object
-      metaRandVar <- rbind(metaRandVar,metaRandLPS)
-      
-      ###### Fit an elo model for each gene using emmreml to DM pseudobulk
+      #after the permutations are finished, use the function "perm.fdr" to add permutation based qvalues to the output
       if ( model == "elo") {
-        designVar <- model.matrix(~trt + trt:elo_centered + trt:age_centered, data=metaRandVar)
-        designTrt <- model.matrix(~trt + trt:elo_centered + trt:age_centered, data=metaRandTrt)
+        emmremlResults <- get(paste0("res_full_DMpb_c",cluster))
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","eloTrt")
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNestNC")
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloNestLPS")
+        assign(value = emmremlResults, x = paste0("res_full_DMpb_c",cluster))
+  
       } else if ( model == "agRec" ) {
-        designVar <- model.matrix(~trt + trt:aggRec_cent + trt:age_centered, data=metaRandVar)
-        designTrt <- model.matrix(~trt + trt:aggRec_cent + trt:age_centered, data=metaRandTrt)
-      } else {
-        designVar <- model.matrix(~trt + trt:groom_cent + trt:age_centered, data=metaRandVar)
-        designTrt <- model.matrix(~trt + trt:groom_cent + trt:age_centered, data=metaRandTrt)
-      }
-      
-      ### Treatment Model
-      
-      #Declare object res_null to store in it the model results: beta coefficients, standard deviations and p values
-      res_null=resid_DMpb[,1:(3*ncol(designTrt))]
-      colnames(res_null)[1:ncol(designTrt)]=paste0("beta_",colnames(designTrt))
-      colnames(res_null)[(ncol(designTrt)+1):(2*ncol(designTrt))]=paste0("sdev_",colnames(designTrt))
-      colnames(res_null)[((2*ncol(designTrt))+1):(3*ncol(designTrt))]=paste0("p_value_",colnames(designTrt))
-      
-      #Declare object random_effects to store in it the individual-wise u random effects
-      random_effects=resid_DMpb[,1:length(indIDs)]
-      colnames(random_effects)=metadata[1:length(indIDs),'ID']
-      
-      #Define matrix Z describing the sample-to-individual mapping
-      K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-      # correcting capitalization so it matches
-      rownames(K)[34] <- 'JE11'
-      colnames(K)[34] <- 'JE11'
-      K=K[unique(metadata$ID),unique(metadata$ID)]
-      
-      Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-      rownames(Z)=metadata$ID
-      colnames(Z)=colnames(K)
-      for(i in 1:ncol(Z)){
-        set=which(metadata$ID == colnames(Z)[i])
-        Z[set,i]=1
-      }
-      
-      #Fit a model for each gene using emmreml
-      for(i in 1:nrow(resid_DMpb)) {
-        emma=emmreml(y=resid_DMpb[i,],X=designTrt,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-        random_effects[i,]=t(emma$uhat)
-        res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-      }
+        emmremlResults <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","agRecTrt")
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.aggRec_cent","agRecNestNC")
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.aggRec_cent","agRecNestLPS")
+        assign(value = emmremlResults, x = paste0("res_full_aggRec_DMpb_c",cluster))
         
-      #we register p-values of the associations to treatment
-      if( iter == 1 ) {
-        shuffled_elo_trt_pvals <- data.frame(x=res_null[,"p_value_trtLPS"])
-        rownames(shuffled_elo_trt_pvals) <- rownames(res_null)
       } else {
-        shuffled_elo_trt_pvals <- cbind(shuffled_elo_trt_pvals,x=res_null[,"p_value_trtLPS"])
-      }
-      
-      ### Behavioral Variable Model
-      
-      #Declare object res_null to store in it the model results: beta coefficients, standard deviations and p values
-      res_null=resid_DMpb[,1:(3*ncol(designVar))]
-      colnames(res_null)[1:ncol(designVar)]=paste0("beta_",colnames(designVar))
-      colnames(res_null)[(ncol(designVar)+1):(2*ncol(designVar))]=paste0("sdev_",colnames(designVar))
-      colnames(res_null)[((2*ncol(designVar))+1):(3*ncol(designVar))]=paste0("p_value_",colnames(designVar))
-      
-      #Declare object random_effects to store in it the individual-wise u random effects
-      random_effects=resid_DMpb[,1:length(indIDs)]
-      colnames(random_effects)=metadata[1:length(indIDs),'ID']
-      
-      #Define matrix Z describing the sample-to-individual mapping
-      K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-      # correcting capitalization so it matches
-      rownames(K)[34] <- 'JE11'
-      colnames(K)[34] <- 'JE11'
-      K=K[unique(metadata$ID),unique(metadata$ID)]
-      
-      Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-      rownames(Z)=metadata$ID
-      colnames(Z)=colnames(K)
-      for(i in 1:ncol(Z)){
-        set=which(metadata$ID == colnames(Z)[i])
-        Z[set,i]=1
-      }
-      
-      #Fit a model for each gene using emmreml
-      for(i in 1:nrow(resid_DMpb)) {
-        emma=emmreml(y=resid_DMpb[i,],X=designVar,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-        random_effects[i,]=t(emma$uhat)
-        res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-      }
+        emmremlResults <- get(paste0("res_full_groom_DMpb_c",cluster))
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","groomTrt")
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.groom_cent","groomNestNC")
+        emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.groom_cent","groomNestLPS")
+        assign(value = emmremlResults, x = paste0("res_full_groom_DMpb_c",cluster))
         
-      #we register p-values of the associations of the behavior at NC and at LPS alone.
-      if( iter == 1 ) {
-        shuffled_elos_pvals_NC <- data.frame(x=res_null[,15])
-        shuffled_elos_pvals_LPS <- data.frame(x=res_null[,16])
-        rownames(shuffled_elos_pvals_NC) <- rownames(res_null)
-        rownames(shuffled_elos_pvals_LPS) <- rownames(res_null)
-      } else {
-        shuffled_elos_pvals_NC <- cbind(shuffled_elos_pvals_NC,x=res_null[,15])
-        shuffled_elos_pvals_LPS <- cbind(shuffled_elos_pvals_LPS,x=res_null[,16])
       }
+  
+      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_",model,"_trt_pval_c",
+                                                        cluster,".txt"), quote = F, row.names = F)
+      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_",model,"_LPS_pval_c",
+                                                        cluster,".txt"), quote = F, row.names = F)
+      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_",model,"_NC_pval_c",
+                                                         cluster,".txt"), quote = F, row.names = F)
       
+      write.table(emmremlResults, file=paste0(workDir,paste0("results/results_c",
+                                                             cluster,"_",model,"_emmreml")),
+                  row.names=T,col.names=T,quote=F,sep='\t')
+      
+      print(date())
+      print(paste0("finished ",model," model permutations"))
+  
     }
-    
-    #after the permutations are finished, use the function "perm.fdr" to add permutation based qvalues to the output
-    if ( model == "elo") {
-      emmremlResults <- get(paste0("res_full_DMpb_c",cluster))
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","eloTrt")
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNestNC")
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloNestLPS")
-      assign(value = emmremlResults, x = paste0("res_full_DMpb_c",cluster))
-      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_elo_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_elo_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_elo_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-      
-    } else if ( model == "agRec" ) {
-      emmremlResults <- get(paste0("res_full_aggRec_DMpb_c",cluster))
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","agRecTrt")
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.aggRec_cent","agRecNestNC")
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.aggRec_cent","agRecNestLPS")
-      assign(value = emmremlResults, x = paste0("res_full_aggRec_DMpb_c",cluster))
-      
-      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_agRec_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_agRec_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_agRec_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-
-    } else {
-      emmremlResults <- get(paste0("res_full_groom_DMpb_c",cluster))
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","groomTrt")
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.groom_cent","groomNestNC")
-      emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.groom_cent","groomNestLPS")
-      assign(value = emmremlResults, x = paste0("res_full_groom_DMpb_c",cluster))
-
-      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_groom_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_groom_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_groom_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-
-    }
-
     
   }
-  
   
 }
 
