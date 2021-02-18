@@ -3,6 +3,7 @@
 .libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", .libPaths() ) )
 workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
 
+#bring in two arguments, cluster "number" and number of iterations
 args <- commandArgs(trailingOnly = TRUE)
 print(args)
 
@@ -10,7 +11,7 @@ library(ggplot2)
 library(limma)
 library(edgeR)
 library(EMMREML)
-#library(cobs)
+library(cobs)
 library(cowplot)
 library(snakecase)
 library(stringr)
@@ -23,7 +24,8 @@ library(reshape2)
 #library(mashr)
 #library(ggcorrplot)
 
-nCluster <- as.numeric(args)
+nCluster <- as.numeric(args[1])
+iters <- as.numeric(args[2])
 
 print(nCluster)
 
@@ -111,7 +113,7 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
 }
 
 #number of permutations
-iters <- 100
+#iters <- 100
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")[nCluster]) {
@@ -316,6 +318,9 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   
   assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
   
+  print(date())
+  print("finished elo model")
+  
   #plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
   
   ######Now the other behavioral metrics
@@ -359,6 +364,8 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   
   assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpb_c",cluster))
   #plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
+  print(date())
+  print("finished agRec model")
   
   #Overall Grooming
   
@@ -398,6 +405,9 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   
   assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
   #plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
+  
+  print(date())
+  print("finished groom model")
   
   ## Permutations for emprirical null ##
   ################################################################################################################################
@@ -553,20 +563,13 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNestNC")
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloNestLPS")
       assign(value = emmremlResults, x = paste0("res_full_DMpb_c",cluster))
-      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_elo_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_elo_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_elo_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-      
+
     } else if ( model == "agRec" ) {
       emmremlResults <- get(paste0("res_full_aggRec_DMpb_c",cluster))
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","agRecTrt")
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.aggRec_cent","agRecNestNC")
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.aggRec_cent","agRecNestLPS")
       assign(value = emmremlResults, x = paste0("res_full_aggRec_DMpb_c",cluster))
-      
-      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_agRec_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_agRec_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_agRec_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
       
     } else {
       emmremlResults <- get(paste0("res_full_groom_DMpb_c",cluster))
@@ -575,12 +578,16 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
       emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.groom_cent","groomNestLPS")
       assign(value = emmremlResults, x = paste0("res_full_groom_DMpb_c",cluster))
       
-      write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_groom_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_groom_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
-      write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_groom_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
-      
     }
+
+    write.table(shuffled_elo_trt_pvals, file = paste0(workDir,"permutations/shuffled_",model,"_trt_pval_c",cluster,".txt"), quote = F, row.names = F)
+    write.table(shuffled_elos_pvals_NC, file = paste0(workDir,"permutations/shuffled_",model,"_LPS_pval_c",cluster,".txt"), quote = F, row.names = F)
+    write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_",model,"_NC_pval_c",cluster,".txt"), quote = F, row.names = F)
     
+    write.table(emmremlResults, file=paste0(workDir,paste0("results/results_c",cluster,"_",model,"_emmreml")),row.names=T,col.names=T,quote=F,sep='\t')
+    
+    print(date())
+    print(paste0("finished ",model," model permutations"))
     
   }
   

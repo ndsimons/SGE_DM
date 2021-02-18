@@ -23,6 +23,7 @@ library(biomaRt)
 library(parallel)
 library(mashr)
 library(ggcorrplot)
+library(scales)
 
 #others from GSEA?
 #library(cobs); library(parallel); library(doParallel)
@@ -135,16 +136,16 @@ for (cluster in c("00","14","02","05","06","07")) {
   ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
   numberNAs <- vector()
   
-  for (r in 1:dim(sge_NC_DM_matrix)[1]) {
-    numberNAs[r] <- sum(is.na(sge_NC_DM_matrix[r,]))
+  for (r in 1:dim(sge_NC_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_NC_DMpb_matrix[r,]))
   }
-  sge_NC_DM_matrix <- sge_NC_DM_matrix[numberNAs < 1,]
+  sge_NC_DMpb_matrix <- sge_NC_DMpb_matrix[numberNAs < 1,]
   
   numberNAs <- vector()
-  for (r in 1:dim(sge_LPS_DM_matrix)[1]) {
-    numberNAs[r] <- sum(is.na(sge_LPS_DM_matrix[r,]))
+  for (r in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_LPS_DMpb_matrix[r,]))
   }
-  sge_LPS_DM_matrix <- sge_LPS_DM_matrix[numberNAs < 1,]
+  sge_LPS_DMpb_matrix <- sge_LPS_DMpb_matrix[numberNAs < 1,]
   
   
   ## only use common set of genes - must exist in all matrices (8)
@@ -275,6 +276,10 @@ for (cluster in c("00","14","02","05","06","07")) {
   metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
   metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
   metadata$groom_cent <- behaveData$gc.overall.groom
+  
+  #flip factors in metadata
+  metadata$trt <- factor(metadata$trt, levels = c("NC","LPS"))
+
   
   ## regress out group effects from DM ##
   design <- model.matrix(~metadata$group)
@@ -581,6 +586,24 @@ for (cluster in c("00","14","02","05","06","07")) {
   ###### obtain directly from Paul's data instead
 }
 
+
+clusterCellID <- as.data.frame(c("00","14","02","05","06","07"))
+
+colnames(clusterCellID) <- "cluster"
+
+clusterCellID$cellData <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_elo_nperms_100.rds",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_elo_nperms_100.RDS",
+                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_elo_nperms_100.RDS")
+
+clusterCellID$cellID <- c("CD8A",
+                          "CD4",
+                          "NK",
+                          "Bcells",
+                          "CD14hi",
+                          "CD14low")
 ```
 
 
@@ -861,25 +884,7 @@ ggplot() +
 
 
 ```{r which betas indicate noisy LPS genes}
-clusterCellID <- as.data.frame(c("00","14","02","03","05","06","07"))
 
-colnames(clusterCellID) <- "cluster"
-
-clusterCellID$cellData <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_elo_nperms_100.rds",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_elo_nperms_100.rds",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_elo_nperms_100.rds",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_B_modelnum_1_covariate_elo_nperms_100.rds",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_elo_nperms_100.rds",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_elo_nperms_100.RDS",
-                            "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_elo_nperms_100.RDS")
-
-clusterCellID$cellID <- c("CD8A",
-                          "CD4",
-                          "NK",
-                          "CD8B",
-                          "Bcells",
-                          "CD14hi",
-                          "CD14low")
 
 #00 = CD8_A
 #01 = cd4
@@ -1277,10 +1282,12 @@ for (c in 1:dim(clusterCellID)[1]) {
 
 ```{r is there correlation between LPS and NC betas of behavior}
 
+gg3col <- hue_pal()(3)
+
 #across behavioral metrics
 for (cluster in c("00","14","02","05","06","07")) {
 
-  cluster <- "00"
+  #cluster <- "00"
   
   agRec <- get(paste0("res_full_aggRec_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggRec_DMpb_c",cluster))[,9])
   agAsym <- get(paste0("res_full_aggAsym_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggAsym_DMpb_c",cluster))[,9]) 
@@ -1317,43 +1324,57 @@ for (cluster in c("00","14","02","05","06","07")) {
   LPS1 <- get(paste0("res_full_aggRec_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggRec_DMpb_c",cluster))[,9])
   LPS1sig <- qvalue(p = get(paste0("res_full_aggRec_DMpb_c",cluster))[,15], fdr.level = .2)$significant
   sigSet1 <- ifelse(NC1sig & LPS1sig, "both", ifelse(LPS1sig, "lps", ifelse(NC1sig, "nc", "neither")))
-  sigSet1 <- factor(sigSet1, levels = c("neither","lps","nc","both"))
+  sigColor1 <- ifelse(NC1sig & LPS1sig, "#F8766D", ifelse(LPS1sig, "#619CFF", ifelse(NC1sig, "#00BA38", "#000000")))
+  #sigSet1 <- factor(sigSet1, levels = c("neither","lps","nc","both"))
   
   p1 <- ggplot() +
-    geom_point(aes(x = LPS1, y = NC1, col = sigSet1), alpha = .2) +
+    geom_point(aes(x = LPS1, y = NC1, col = sigColor1), alpha = .5) +
     geom_smooth(aes(x = LPS1, y = NC1), method = "lm") +
+    annotate(geom = 'text', x = -Inf, y = Inf, hjust = "inward", vjust = "inward", size = 3,
+             label = paste0("R=",round(cor.test(NC1,LPS1)$estimate, digits = 3),
+                            " p=",signif(cor.test(NC1,LPS1)$p.value, digits = 2))) +
     xlab("LPS:agRec std Betas") + ylab("NC:agRec std Betas") +
-    scale_color_manual(values = c("black","blue","blue","red")) +
+    scale_color_manual(values = c("black",gg3col[3:1])) +
     theme(legend.position = "none") +
-    ggtitle(paste0("c",cluster," - agRec"), subtitle = paste0("NC:",sum(NC1sig)," LPS:",sum(LPS1sig)," both:",sum(sigSet1 == "both")))
+    ggtitle(paste0("c",cluster," - agRec"), 
+            subtitle = paste0("NC:",sum(NC1sig)," LPS:",sum(LPS1sig)," both:",sum(sigSet1 == "both")))
   
   NC2 <- get(paste0("res_full_aggAsym_DMpb_c",cluster))[,4] / sqrt(get(paste0("res_full_aggAsym_DMpb_c",cluster))[,10])
   NC2sig <- qvalue(p = get(paste0("res_full_aggAsym_DMpb_c",cluster))[,16], fdr.level = .2)$significant
   LPS2 <- get(paste0("res_full_aggAsym_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_aggAsym_DMpb_c",cluster))[,9])
   LPS2sig <- qvalue(p = get(paste0("res_full_aggAsym_DMpb_c",cluster))[,15], fdr.level = .2)$significant
   sigSet2 <- ifelse(NC2sig & LPS2sig, "both", ifelse(LPS2sig, "lps", ifelse(NC2sig, "nc", "neither")))
+  sigColor2 <- ifelse(NC2sig & LPS2sig, "#F8766D", ifelse(LPS2sig, "#619CFF", ifelse(NC2sig, "#00BA38", "#000000")))
   sigSet2 <- factor(sigSet2, levels = c("neither","lps","nc","both"))
   
   p2 <- ggplot() +
-    geom_point(aes(x = LPS2, y = NC2, col = sigSet2), alpha = .2) +
+    geom_point(aes(x = LPS2, y = NC2, col = sigColor2), alpha = .5) +
     geom_smooth(aes(x = LPS2, y = NC2), method = "lm") +
+    annotate(geom = 'text', x = -Inf, y = Inf, hjust = "inward", vjust = "inward", size = 3,
+             label = paste0("R=",round(cor.test(NC2,LPS2)$estimate, digits = 3),
+                            " p=",signif(cor.test(NC2,LPS2)$p.value, digits = 2))) +
     xlab("LPS:agAsym std Betas") + ylab("NC:agAsym std Betas") +
-    scale_color_manual(values = c("black","blue","blue","red")) +
+    scale_color_manual(values = c("black",gg3col[3:1])) +
     theme(legend.position = "none") +
-    ggtitle(paste0("c",cluster," - agAsym"), subtitle = paste0("NC:",sum(NC2sig)," LPS:",sum(LPS2sig)," both:",sum(sigSet2 == "both")))
+    ggtitle(paste0("c",cluster," - agAsym"), 
+            subtitle = paste0("NC:",sum(NC2sig)," LPS:",sum(LPS2sig)," both:",sum(sigSet2 == "both")))
   
   NC3 <- get(paste0("res_full_groom_DMpb_c",cluster))[,4] / sqrt(get(paste0("res_full_groom_DMpb_c",cluster))[,10])
   NC3sig <- qvalue(p = get(paste0("res_full_groom_DMpb_c",cluster))[,16], fdr.level = .2)$significant
   LPS3 <- get(paste0("res_full_groom_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_groom_DMpb_c",cluster))[,9])
   LPS3sig <- qvalue(p = get(paste0("res_full_groom_DMpb_c",cluster))[,15], fdr.level = .2)$significant
   sigSet3 <- ifelse(NC3sig & LPS3sig, "both", ifelse(LPS3sig, "lps", ifelse(NC3sig, "nc", "neither")))
+  sigColor3 <- ifelse(NC3sig & LPS3sig, "#F8766D", ifelse(LPS3sig, "#619CFF", ifelse(NC3sig, "#00BA38", "#000000")))
   sigSet3 <- factor(sigSet3, levels = c("neither","lps","nc","both"))
   
   p3 <- ggplot() +
-    geom_point(aes(x = LPS3, y = NC3, col = sigSet3), alpha = .2) +
+    geom_point(aes(x = LPS3, y = NC3, col = sigColor3), alpha = .5) +
     geom_smooth(aes(x = LPS3, y = NC3), method = "lm") +
+    annotate(geom = 'text', x = -Inf, y = Inf, hjust = "inward", vjust = "inward", size = 3,
+             label = paste0("R=",round(cor.test(NC3,LPS3)$estimate, digits = 3),
+                            " p=",signif(cor.test(NC3,LPS3)$p.value, digits = 2))) +
     xlab("LPS:groom std Betas") + ylab("NC:groom std Betas") +
-    scale_color_manual(values = c("black","blue","blue","red")) +
+    scale_color_manual(values = c("black",gg3col[3:1])) +
     theme(legend.position = "none") +
     ggtitle(paste0("c",cluster," - groom"), subtitle = paste0("NC:",sum(NC3sig)," LPS:",sum(LPS3sig)," both:",sum(sigSet3 == "both")))
   
@@ -1362,13 +1383,17 @@ for (cluster in c("00","14","02","05","06","07")) {
   LPS4 <- get(paste0("res_full_DMpb_c",cluster))[,3] / sqrt(get(paste0("res_full_DMpb_c",cluster))[,9])
   LPS4sig <- qvalue(p = get(paste0("res_full_DMpb_c",cluster))[,15], fdr.level = .2)$significant
   sigSet4 <- ifelse(NC4sig & LPS4sig, "both", ifelse(LPS4sig, "lps", ifelse(NC4sig, "nc", "neither")))
+  sigColor4 <- ifelse(NC4sig & LPS4sig, "#F8766D", ifelse(LPS4sig, "#619CFF", ifelse(NC4sig, "#00BA38", "#000000")))
   sigSet4 <- factor(sigSet4, levels = c("neither","lps","nc","both"))
   
   p4 <- ggplot() +
-    geom_point(aes(x = LPS4, y = NC4, col = sigSet4), alpha = .2) +
+    geom_point(aes(x = LPS4, y = NC4, col = sigColor4), alpha = .5) +
     geom_smooth(aes(x = LPS4, y = NC4), method = "lm") +
+    annotate(geom = 'text', x = -Inf, y = Inf, hjust = "inward", vjust = "inward", size = 3,
+             label = paste0("R=",round(cor.test(NC4,LPS4)$estimate, digits = 3),
+                            " p=",signif(cor.test(NC4,LPS4)$p.value, digits = 2))) +
     xlab("LPS:elo std Betas") + ylab("NC:elo std Betas") +
-    scale_color_manual(values = c("black","blue","blue","red")) +
+    scale_color_manual(values = c("black",gg3col[3:1])) +
     theme(legend.position = "none") +
     ggtitle(paste0("c",cluster," - elo"), subtitle = paste0("NC:",sum(NC4sig)," LPS:",sum(LPS4sig)," both:",sum(sigSet4 == "both")))
   
@@ -1383,7 +1408,7 @@ for (cluster in c("00","14","02","05","06","07")) {
 ```{r histograms with counts of significant betas}
 
 for (variable in c("aggRec","elo","groom")) {
-  #variable <- "groom"
+  #variable <- "elo"
 
   for (cluster in c("00","14","02","05","06","07")) {
     #cluster <- "02"
@@ -1394,32 +1419,53 @@ for (variable in c("aggRec","elo","groom")) {
       emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
     }
     
-    emrml$NCstdBeta <- emrml[,4] / sqrt(emrml[,10])
-    emrml$LPSstdBeta <- emrml[,3] / sqrt(emrml[,9])
+    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
     
-    emrml$NCsig <- qvalue(p = emrml[,16], fdr.level = .2)$significant
-    emrml$LPSsig <- qvalue(p = emrml[,15], fdr.level = .2)$significant 
+    emrml$NCsig <- qvalue(p = emrml[,15], fdr.level = .2)$significant
+    emrml$LPSsig <- qvalue(p = emrml[,16], fdr.level = .2)$significant 
     
     assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
     assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+    
+    NCposRatio <- mean(emrml$NCstdBeta > 0)
+    LPSposRatio <- mean(emrml$LPSstdBeta > 0)
 
     for (treatment in c("NC","LPS")) {
       
       if (treatment == "NC") {
         colNum <- 19
+        betaPosRatio <- NCposRatio
       } else {
         colNum <- 20
+        betaPosRatio <- LPSposRatio
       }
       
       posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
       negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
       
+      if (sum(posBetas,negBetas) > 0) {
+        #binomial test of 50-50 pos/neg betas
+        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
+        
+        binomPval <- posBinomBkg$p.value
+      } else {
+        rm(posBinomBkg)
+        rm(posBinomNull)
+        binomPval <- NA
+      }
+      
       ggplot() +
         geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
         ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
                        dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
-        geom_text(aes(x = 6, y = 75, label = posBetas), size = 10) +
-        geom_text(aes(x = -6, y = 75, label = negBetas), size = 10) +
+        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
+                 size = 8, hjust = .25, vjust = .5) +
         xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
         xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
       
@@ -1436,14 +1482,26 @@ for (variable in c("aggRec","elo","groom")) {
       
       posBetas <- sum(get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta > 0)
       negBetas <- sum(get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta < 0)
+      
+      TRTposRatio <- mean(emrml$LPSstdBeta > 0)
+      
+      
+      #binomial test of 50-50 pos/neg betas
+      posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+      
+      #binomial test of pos/neg betas from exact distribution
+      posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = TRTposRatio)
+
 
 
       ggplot() +
-        geom_histogram(aes(x = -get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta), bins = 50) +
+        geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta), bins = 50) +
         ggtitle(paste0("Treatment - c",cluster," - ",
                        dim(get(paste0("plotEmrml",cluster,variable,"TRT")))[1]," sig genes")) +
-        geom_text(aes(x = 9, y = 250, label = negBetas), size = 10) +
-        geom_text(aes(x = -9, y = 250, label = posBetas), size = 10) +
+        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = 7, y = 250, label = paste0("p=",signif(posBinomBkg$p.value, digits = 2)), 
+                 size = 8, hjust = .25, vjust = .5) +
         xlab(paste0("Treatment - c",cluster," - std Betas (----> higher LPS variance)")) +
         xlim(c(-12,12)) + ylim(c(0,300)) + theme(plot.title = element_text(size=24))
     
@@ -1457,6 +1515,11 @@ for (variable in c("aggRec","elo","groom")) {
 
 
 ```
+
+
+
+
+
 ```{r is there a correlation between mean and DM betas}
 
 
@@ -1469,7 +1532,6 @@ betaLocation <- c("elo","aggRec","groom")
 clusterCellID$aggRecBetas <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS",
                                "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS",
                                "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS",
-                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_B_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS",
                                "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS",
                                "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS",
                                "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS")
@@ -1477,7 +1539,6 @@ clusterCellID$aggRecBetas <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_f
 clusterCellID$groomBetas <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS",
                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD4_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS",
                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_NK_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS",
-                              "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_B_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS",
                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_B_cells_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS",
                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14hi_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS",
                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS")
@@ -1489,7 +1550,7 @@ for (cluster in c("00","02","14","05","06","07")) {
   #cluster <- "00"
   
   for (variable in c("aggRec","groom","elo")) {
-    #variable <- "elo"
+    #variable <- "groom"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
                                          (3 + which(betaLocation == variable))])
@@ -1540,6 +1601,8 @@ for (cluster in c("00","02","14","05","06","07")) {
     
     #assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
     #assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+    
+    #ifelse(NC4sig & LPS4sig, "#F8766D", ifelse(LPS4sig, "#619CFF", ifelse(NC4sig, "#00BA38", "#000000")))
       
     ncResults$combSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "both",
                                 ifelse(ncResults$NCsigDM, "dm",
@@ -1552,16 +1615,27 @@ for (cluster in c("00","02","14","05","06","07")) {
     ncResults$combSig <- factor(ncResults$combSig, levels = c("neither","mean","dm","both"))
     lpsResults$combSig <- factor(lpsResults$combSig, levels = c("neither","mean","dm","both"))
     
+    ncResults$colorSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "#F8766D",
+                                ifelse(ncResults$NCsigDM, "#00BA38",
+                                       ifelse(ncResults$NCsigMean, "#619CFF", "#000000")))
+    
+    lpsResults$colorSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "#F8766D",
+                                ifelse(lpsResults$LPSsigDM, "#00BA38",
+                                       ifelse(lpsResults$LPSsigMean, "#619CFF", "#000000")))
+
+    
     treatment <- "NC"
     
     ggplot(data = ncResults, aes(x = NCstdBetaMean, y = NCstdBetaDM)) +
-      geom_point(aes(col = combSig), alpha = .2) +
+      geom_point(aes(col = colorSig), alpha = .5) +
       geom_smooth(method = "lm") +
       xlab(paste0("Mean std Betas ",treatment,":",variable)) + 
       ylab(paste0("DM std Betas ",treatment,":",variable)) +
-      scale_color_manual(values = c("black","blue","blue","red")) +
+      scale_color_manual(values = c("black",gg3col[3:1])) +
       geom_text(aes(x = .9*min(NCstdBetaMean), y = .9*max(NCstdBetaDM), 
-                    label = paste0("R = ",round(cor(NCstdBetaMean,NCstdBetaDM),digits = 2)))) +
+                    label = paste0("R=",round(cor(NCstdBetaMean,NCstdBetaDM),digits = 2),
+                                   ", p=",signif(cor.test(NCstdBetaMean,NCstdBetaDM)$p.value,digits = 2))),
+                hjust = 0) +
       theme(legend.position = "none") +
       ggtitle(paste0("c",cluster," - ",treatment,":",variable), 
               subtitle = paste0("mean:",sum(ncResults$NCsigMean)," DM:",sum(ncResults$NCsigDM)))
@@ -1571,13 +1645,15 @@ for (cluster in c("00","02","14","05","06","07")) {
     treatment <- "LPS"
       
     ggplot(data = lpsResults, aes(x = LPSstdBetaMean, y = LPSstdBetaDM)) +
-      geom_point(aes(col = combSig), alpha = .2) +
+      geom_point(aes(col = colorSig), alpha = .5) +
       geom_smooth(method = "lm") +
       xlab(paste0("Mean std Betas ",treatment,":",variable)) + 
       ylab(paste0("DM std Betas ",treatment,":",variable)) +
-      scale_color_manual(values = c("black","blue","blue","red")) +
+      scale_color_manual(values = c("black",gg3col[3:1])) +
       geom_text(aes(x = .9*min(LPSstdBetaMean), y = .9*max(LPSstdBetaDM), 
-                    label = paste0("R = ",round(cor(LPSstdBetaMean,LPSstdBetaDM),digits = 2)))) +
+                    label = paste0("R=",round(cor(LPSstdBetaMean,LPSstdBetaDM),digits = 2),
+                                   ", p=",signif(cor.test(LPSstdBetaMean,LPSstdBetaDM)$p.value,digits = 2))),
+                hjust = 0) +
       theme(legend.position = "none") +
       ggtitle(paste0("c",cluster," - ",treatment,":",variable), 
               subtitle = paste0("mean:",sum(lpsResults$LPSsigMean)," DM:",sum(lpsResults$LPSsigDM)))
@@ -1610,16 +1686,23 @@ for (cluster in c("00","02","14","05","06","07")) {
                                            ifelse(trtResults$TRTsigMean, "mean", "neither")))
         
         trtResults$combSig <- factor(trtResults$combSig, levels = c("neither","mean","dm","both"))
+        
+        trtResults$colorSig <- ifelse(trtResults$TRTsigDM & trtResults$TRTsigMean, "#F8766D",
+                                ifelse(trtResults$TRTsigDM, "#00BA38",
+                                       ifelse(trtResults$TRTsigMean, "#619CFF", "#000000")))
+
     
       
-        ggplot(data = trtResults, aes(x = TRTstdBetaMean, y = -TRTstdBetaDM)) +
-          geom_point(aes(col = combSig), alpha = .2) +
+        ggplot(data = trtResults, aes(x = TRTstdBetaMean, y = TRTstdBetaDM)) +
+          geom_point(aes(col = colorSig), alpha = .5) +
           geom_smooth(method = "lm") +
           xlab(paste0("Mean std Betas Treatment (Higher GE in LPS ---->)")) + 
           ylab(paste0("DM std Betas Treatment (Higher Var in LPS ---->)")) +
-          scale_color_manual(values = c("black","blue","blue","red")) +
-          geom_text(aes(x = .9*min(TRTstdBetaMean), y = .9*max(-TRTstdBetaDM), 
-                    label = paste0("R = ",round(cor(TRTstdBetaMean,-TRTstdBetaDM),digits = 2)))) +
+          scale_color_manual(values = c("black",gg3col[3:1])) +
+          geom_text(aes(x = .9*min(TRTstdBetaMean), y = .9*max(TRTstdBetaDM), 
+                    label = paste0("R=",round(cor(TRTstdBetaMean,TRTstdBetaDM),digits = 2),
+                                   ", p=",signif(cor.test(TRTstdBetaMean,TRTstdBetaDM)$p.value,digits = 2))),
+                hjust = 0) +
           theme(legend.position = "none") +
           ggtitle(paste0("c",cluster," - Treatment"), 
                   subtitle = paste0("mean:",sum(trtResults$TRTsigMean)," DM:",sum(trtResults$TRTsigDM)))
