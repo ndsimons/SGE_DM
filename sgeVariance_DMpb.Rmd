@@ -1035,11 +1035,11 @@ sigGenesagRec <- colSums(sigGenes[1:12,1:4])
 sigGenesGroom <- colSums(sigGenes[19:30,1:4])
 
 print("treatment")
-binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
+trtP <- binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
 print("groom")
-binom.test(sigGenesagRec[2], sum(sigGenesagRec[1:2]), p = sigGenesagRec[4]/sum(sigGenesagRec[3:4]))
+agRecP <- binom.test(sigGenesagRec[2], sum(sigGenesagRec[1:2]), p = sigGenesagRec[4]/sum(sigGenesagRec[3:4]))
 print("agRec")
-binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroom[4]/sum(sigGenesGroom[3:4]))
+groomP <- binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroom[4]/sum(sigGenesGroom[3:4]))
 ```
 
 
@@ -1893,7 +1893,7 @@ for (cluster in clusterCellID$cluster) {
 
 
 
-```{r}
+```{r behavioral measures by lps and nc}
   for (bMetric in c("aggRec","groom")) {
     #bMetric <- "aggRec"
     
@@ -1928,6 +1928,225 @@ for (cluster in clusterCellID$cluster) {
 
     }
   }
+
+```
+
+```{r cell type by pathway chart}
+#treatment
+
+c00tmp <- cbind(gseaC00bytrt,"CD8")
+c14tmp <- cbind(gseaC14bytrt,"CD4")
+c02tmp <- cbind(gseaC02bytrt,"NK")
+c05tmp <- cbind(gseaC05bytrt,"B")
+c06tmp <- cbind(gseaC06bytrt,"CD14lo")
+c07tmp <- cbind(gseaC07bytrt,"CD14hi")
+
+colnames(c00tmp)[7] <- colnames(c14tmp)[7] <- colnames(c02tmp)[7] <- colnames(c05tmp)[7] <- colnames(c06tmp)[7] <- colnames(c07tmp)[7] <-"cell_type"
+
+trtGSEA <- rbind(c00tmp,
+                  c14tmp,
+                  c02tmp,
+                  c05tmp,
+                  c06tmp,
+                  c07tmp)
+
+trtGSEA$cell_type <- factor(trtGSEA$cell_type, levels = c("CD8","CD4","NK","B","CD14lo","CD14hi"))
+
+trtGSEA$pathway <- str_replace(trtGSEA$pathway, pattern = "HALLMARK_", replacement = "")
+
+ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_upVar, size = -log10(pval_upVar + .001)))
+
+ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_downVar, size = -log10(pval_downVar + .001)))
+
+#make a column of "most severe" direction, up + down varianced, for each pathway
+
+trtGSEA$pval_sigVar <- 0
+trtGSEA$NES_sigVar <- 0
+trtGSEA$DIR_sigVar <- ""
+
+for (i in 1:dim(trtGSEA)[1]) {
+  if ( trtGSEA$pval_upVar[i] < trtGSEA$pval_downVar[i] ) {
+    #upVariance is more
+    trtGSEA$DIR_sigVar[i] <- "up"
+    trtGSEA$pval_sigVar[i] <- trtGSEA$pval_upVar[i]
+    trtGSEA$NES_sigVar[i] <- trtGSEA$NES_upVar[i]
+  } else {
+    #downVariance is more
+    trtGSEA$DIR_sigVar[i] <- "down"
+    trtGSEA$pval_sigVar[i] <- trtGSEA$pval_downVar[i]
+    trtGSEA$NES_sigVar[i] <- trtGSEA$NES_downVar[i]
+
+  }
+}
+
+ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001)))
+
+
+#sort pathways by combined sig p-value
+allPathways <- sort(unique(trtGSEA$pathway))
+pathwaySig <- vector()
+
+for (p in allPathways) {
+  pvalSum <- sum(subset(trtGSEA, pathway == p)$pval_sigVar)
+  
+  #penalty for missing celltypes
+  pvalSum <- pvalSum + abs(length(subset(trtGSEA, pathway == p)$pval_sigVar) - 6)
+  
+  pathwaySig <- c(pathwaySig,pvalSum)
+}
+names(pathwaySig) <- allPathways
+
+trtOrder <- names(sort(pathwaySig, decreasing = TRUE))
+
+
+trtGSEA$pathway <- factor(trtGSEA$pathway, levels = names(sort(pathwaySig, decreasing = TRUE)))
+
+
+
+
+ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_upVar, size = -log10(pval_upVar + .001))) +
+  scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-1,1))
+
+ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_downVar, size = -log10(pval_downVar + .001))) +
+  scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-1,1))
+
+ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001))) +
+  scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-1,1))
+
+#plot top 25 only
+t25paths <- names(sort(pathwaySig)[1:25])
+
+trtGSEAt25 <- subset(trtGSEA, pathway %in% t25paths)
+
+ggplot(data = trtGSEAt25, aes(x = cell_type, y = pathway)) +
+  geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001))) +
+  scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
+  labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
+  ggtitle("Treatment GSEA Results") + 
+  theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
+  theme(axis.text.y = element_text(size = 6))
+    
+    ggsave(paste0(workDir,"figures/gsea/heatmap_treatment_top25_pathways.png"), 
+           width = 8, height = 5)
+
+
+```
+
+
+```{r GSEA agression received LPS}
+
+for (behavior in c("aggRec","groom")) {
+  for (treatment in c("NC","LPS")) {
+    
+    #behavior <- "groom"
+    #treatment <- "LPS"
+    
+    c00tmp <- cbind(get(paste0("gseaC00by",behavior,treatment)),"CD8")
+    c14tmp <- cbind(get(paste0("gseaC14by",behavior,treatment)),"CD4")
+    c02tmp <- cbind(get(paste0("gseaC02by",behavior,treatment)),"NK")
+    c05tmp <- cbind(get(paste0("gseaC05by",behavior,treatment)),"B")
+    c06tmp <- cbind(get(paste0("gseaC06by",behavior,treatment)),"CD14lo")
+    c07tmp <- cbind(get(paste0("gseaC07by",behavior,treatment)),"CD14hi")
+    
+    
+    colnames(c00tmp)[7] <- colnames(c14tmp)[7] <- colnames(c02tmp)[7] <- colnames(c05tmp)[7] <- colnames(c06tmp)[7] <- colnames(c07tmp)[7] <-"cell_type"
+    
+    trtGSEA <- rbind(c00tmp,
+                      c14tmp,
+                      c02tmp,
+                      c05tmp,
+                      c06tmp,
+                      c07tmp)
+    
+    trtGSEA$cell_type <- factor(trtGSEA$cell_type, levels = c("CD8","CD4","NK","B","CD14lo","CD14hi"))
+    
+    trtGSEA$pathway <- str_replace(trtGSEA$pathway, pattern = "HALLMARK_", replacement = "")
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_upVar, size = -log10(pval_upVar + .001)))
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_downVar, size = -log10(pval_downVar + .001)))
+    
+    #make a column of "most severe" direction, up + down varianced, for each pathway
+    
+    trtGSEA$pval_sigVar <- 0
+    trtGSEA$NES_sigVar <- 0
+    trtGSEA$DIR_sigVar <- ""
+    
+    for (i in 1:dim(trtGSEA)[1]) {
+      if ( trtGSEA$pval_upVar[i] < trtGSEA$pval_downVar[i] ) {
+        #upVariance is more
+        trtGSEA$DIR_sigVar[i] <- "up"
+        trtGSEA$pval_sigVar[i] <- trtGSEA$pval_upVar[i]
+        trtGSEA$NES_sigVar[i] <- trtGSEA$NES_upVar[i]
+      } else {
+        #downVariance is more
+        trtGSEA$DIR_sigVar[i] <- "down"
+        trtGSEA$pval_sigVar[i] <- trtGSEA$pval_downVar[i]
+        trtGSEA$NES_sigVar[i] <- trtGSEA$NES_downVar[i]
+    
+      }
+    }
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001)))
+    
+    
+    #sort pathways by combined sig p-value
+    allPathways <- sort(unique(trtGSEA$pathway))
+    pathwaySig <- vector()
+    
+    for (p in allPathways) {
+      pvalSum <- sum(subset(trtGSEA, pathway == p)$pval_sigVar)
+      
+      #penalty for missing celltypes
+      pvalSum <- pvalSum + abs(length(subset(trtGSEA, pathway == p)$pval_sigVar) - 6)
+      
+      pathwaySig <- c(pathwaySig,pvalSum)
+    }
+    names(pathwaySig) <- allPathways
+    
+    
+    trtGSEA$pathway <- factor(trtGSEA$pathway, levels = trtOrder)
+    
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_upVar, size = -log10(pval_upVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85))
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_downVar, size = -log10(pval_downVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85))
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85))
+    
+    #plot top 25 only | use top 25 from TREATMENT
+    #t25paths <- names(sort(pathwaySig)[1:25])
+    
+    trtGSEAt25 <- subset(trtGSEA, pathway %in% t25paths)
+    
+    ggplot(data = trtGSEAt25, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
+      labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
+      ggtitle(paste0(treatment,":",behavior," GSEA Results")) +
+      theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
+      theme(axis.text.y = element_text(size = 6))
+    
+    ggsave(paste0(workDir,"figures/gsea/heatmap_",behavior,"_",treatment,"_top25_pathways.png"), 
+           width = 8, height = 5)
+
+  }
+}
 
 ```
 
@@ -1997,4 +2216,25 @@ behaveGSEA
 write.table(behaveGSEA, file=paste0(workDir,"gsea_All_variables_pathways.txt"),
                 row.names=T,col.names=T,quote=F,sep='\t')
 ```
+
+
+do the underlying data, on an individual by individual basis, reflect the same negative correlation between DMpb and pbMean?
+```{r}
+cellType <- vector()
+DMpbMeanR <- vector()
+DMpbMeanP <- vector()
+indID <- vector()
+NCorLPS <- vector()
+
+
+
+#loop through clusters
+
+#loop through individuals
+
+
+
+
+```
+
 
