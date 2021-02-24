@@ -1223,8 +1223,13 @@ just calculate the mean of R and R^2
 
 ```{r what is the mean of R and R squared}
 
+##### USE THIS SAME LOOP TO GET THE CORRELATION INFO FOR THE PLOTS... JUST ADD CLUSTER, VAR, TRT etc
+
 rSquared <- vector()
 justRs <- vector()
+clusterInfo <- vector()
+varInfo <- vector()
+trtInfo <- vector()
 
 for (cluster in c("00","02","14","05","06","07")) {
   #cluster <- "00"
@@ -1317,6 +1322,145 @@ for (cluster in c("00","02","14","05","06","07")) {
     }
   }
 }
+
+```
+
+
+Does the Mean-DM relationship mirror the individual Mean-DM relationship?
+```{r}
+
+clusterID <- vector()
+animalID <- vector()
+NCcor <- vector()
+LPScor <- vector()
+COMBcor <- vector()
+
+
+for (cluster in c("00","14","02","05","06","07")) {
+  
+  #cluster <- "07"
+  
+  sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
+  sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
+  
+  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
+  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
+  numberNAs <- vector()
+  for (r in 1:dim(sge_NC_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_NC_DMpb_matrix[r,]))
+  }
+  sge_NC_DMpb_matrix <- sge_NC_DMpb_matrix[numberNAs < 1,]
+  
+  numberNAs <- vector()
+  for (r in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_LPS_DMpb_matrix[r,]))
+  }
+  sge_LPS_DMpb_matrix <- sge_LPS_DMpb_matrix[numberNAs < 1,]
+  
+  
+  ## only use common set of genes - must exist in all matrices (8)
+  geneList <- rownames(table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))) == 4]
+  
+  geneList <- geneList[geneList != "chrMT"]
+
+  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+  
+  for (fObj in apropos("^sge_[NL][CP]")) {
+    tmpObj <- get(fObj)
+    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+    
+    ## fix MO - 77_06 ID
+    if (sum(colnames(tmpObj) == "X77_06") > 0) {
+      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    }
+    #sort the columns by ID to match metadata
+    tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    
+    #reassign the temp object to the sge_NC, etc
+    assign(x = fObj, value = tmpObj)
+  }
+  
+  
+  ## generate a dataframe of NC and LPS combined ##
+  sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+  rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+  sge_pbMean_matrix_nested$Row.names <- NULL
+  
+  #and raw means and variances to use in the variance model
+  sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
+  rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
+  sge_DMpb_matrix_nested$Row.names <- NULL
+  
+  indIDs <- colnames(sge_NC_DMpb_matrix)
+  
+  totInds <- length(indIDs)
+  
+  #for each individual, get the R of NC, LPS, and combined
+  for (i in 1:length(indIDs)) {
+    #i <- 18
+    
+    rLPS <- cor(sge_LPS_DMpb_matrix[,i],sge_LPS_pbMean_matrix[,i])
+    rNC <- cor(sge_NC_DMpb_matrix[,i],sge_NC_pbMean_matrix[,i])
+    rCmb <- cor(c(sge_LPS_DMpb_matrix[,i],sge_NC_DMpb_matrix[,i]),
+                c(sge_LPS_pbMean_matrix[,i],sge_LPS_pbMean_matrix[,i]))
+
+    # ggplot() +
+    #   geom_point(aes(x = sge_NC_DMpb_matrix[,i], y = sge_NC_pbMean_matrix[,i]), alpha = 0.5) +
+    #   geom_smooth(aes(x = sge_NC_DMpb_matrix[,i], y = sge_NC_pbMean_matrix[,i]), method = "lm") +
+    #   ggtitle(paste0("nc ",rNC))
+    # 
+    # ggplot() +
+    #   geom_point(aes(x = sge_LPS_DMpb_matrix[,i], y = sge_LPS_pbMean_matrix[,i]), alpha = 0.5) +
+    #   geom_smooth(aes(x = sge_LPS_DMpb_matrix[,i], y = sge_LPS_pbMean_matrix[,i]), method = "lm") +
+    #   ggtitle(paste0("lps ",rLPS))
+    # 
+    #     
+    # ggplot() +
+    #   geom_point(aes(x = c(sge_LPS_DMpb_matrix[,i],sge_NC_DMpb_matrix[,i]),
+    #                  y = c(sge_LPS_pbMean_matrix[,i],sge_LPS_pbMean_matrix[,i])), alpha = 0.5) +
+    #   geom_smooth(aes(x = c(sge_LPS_DMpb_matrix[,i],sge_NC_DMpb_matrix[,i]),
+    #                  y = c(sge_LPS_pbMean_matrix[,i],sge_LPS_pbMean_matrix[,i])), method = "lm") +
+    #   ggtitle(paste0("combined ",rCmb))
+    
+    clusterID <- c(clusterID,cluster)
+    animalID <- c(animalID,indIDs[i])
+    NCcor <- c(NCcor,rNC)
+    LPScor <- c(LPScor,rLPS)
+    COMBcor <- c(COMBcor,rCmb)
+    
+  }
+  
+}
+
+dmMeanCors <- data.frame(clusterID,animalID,NCcor,LPScor,COMBcor)
+
+ggplot(data = dmMeanCors, aes(y = COMBcor, x = clusterID)) +
+  geom_point() +
+  geom_boxplot()
+
+ggplot(data = dmMeanCors, aes(y = LPScor, x = clusterID)) +
+  geom_point() +
+  geom_boxplot()
+
+ggplot(data = dmMeanCors, aes(y = NCcor, x = clusterID)) +
+  geom_point() +
+  geom_boxplot()
+
+#for treatment use COMB
+
+
+#for NC / agg and groom use NC
+
+#for LPS / agg and groom use LPS
 
 ```
 
