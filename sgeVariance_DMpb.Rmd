@@ -1219,11 +1219,11 @@ for (cluster in c("00","02","14","05","06","07")) {
 }
 
 ```
-just calculate the mean of R and R^2
+just calculate the mean of R and R^2 of the betas
 
 ```{r what is the mean of R and R squared}
 
-##### USE THIS SAME LOOP TO GET THE CORRELATION INFO FOR THE PLOTS... JUST ADD CLUSTER, VAR, TRT etc
+
 
 rSquared <- vector()
 justRs <- vector()
@@ -1286,10 +1286,19 @@ for (cluster in c("00","02","14","05","06","07")) {
     if ( variable != "elo" ) {
     meanDMr <- cor(ncResults$NCstdBetaMean,ncResults$NCstdBetaDM)
     justRs <- c(justRs, meanDMr)
+    clusterInfo <- c(clusterInfo,cluster)
+    varInfo <- c(varInfo,variable)
+    trtInfo <- c(trtInfo,"NC")
+
     rSquared <- c(rSquared, meanDMr^2)
   
     meanDMr <- cor(lpsResults$LPSstdBetaMean,lpsResults$LPSstdBetaDM)
     justRs <- c(justRs, meanDMr)
+    clusterInfo <- c(clusterInfo,cluster)
+    varInfo <- c(varInfo,variable)
+    trtInfo <- c(trtInfo,"LPS")
+
+    
     rSquared <- c(rSquared, meanDMr^2)
     }
   
@@ -1317,11 +1326,17 @@ for (cluster in c("00","02","14","05","06","07")) {
         
         meanDMr <- cor(trtResults$TRTstdBetaMean,trtResults$TRTstdBetaDM)
         justRs <- c(justRs, meanDMr)
+        clusterInfo <- c(clusterInfo,cluster)
+        varInfo <- c(varInfo,"treatment")
+        trtInfo <- c(trtInfo,"Combined")
+
         rSquared <- c(rSquared, meanDMr^2)
 
     }
   }
 }
+
+dmMeanBetaCors <- data.frame(justRs,clusterInfo,varInfo,trtInfo)
 
 ```
 
@@ -1441,17 +1456,88 @@ for (cluster in c("00","14","02","05","06","07")) {
   
 }
 
-dmMeanCors <- data.frame(clusterID,animalID,NCcor,LPScor,COMBcor)
+dmMeanRawCors <- data.frame(clusterID,animalID,NCcor,LPScor,COMBcor)
 
-ggplot(data = dmMeanCors, aes(y = COMBcor, x = clusterID)) +
+
+dmMeanRawCors$agRecNCbetaR <- 0
+dmMeanRawCors$agRecLPSbetaR <- 0
+dmMeanRawCors$groomNCbetaR <- 0
+dmMeanRawCors$groomLPSbetaR <- 0
+dmMeanRawCors$TRTbetaR <- 0
+
+for (r in 1:dim(dmMeanRawCors)[1]) {
+  #which cluster is this row from
+  cluster <- dmMeanRawCors$clusterID[r]
+  
+  #for columns 6->10, fill in beta R's from the dmMeanBeta object
+  dmMeanRawCors[r,6:10] <- subset(dmMeanBetaCors, clusterInfo == cluster)$justRs
+}
+
+#add cell names
+dmMeanRawCors$clusterNames <- dmMeanRawCors$clusterID
+
+dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "00", replacement = "CD8")
+dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "02", replacement = "NK")
+dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "14", replacement = "CD4")
+dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "05", replacement = "B")
+dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "06", replacement = "CD14lo")
+dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "07", replacement = "CD14hi")
+
+
+ggplot(data = dmMeanRawCors, aes(y = COMBcor, x = clusterID)) +
   geom_point() +
   geom_boxplot()
 
-ggplot(data = dmMeanCors, aes(y = LPScor, x = clusterID)) +
+ggplot(data = dmMeanRawCors, aes(y = COMBcor, x = TRTbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("LPS+NC individuals, TRT betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_treatmentComb.png"), width = 6, height = 4)
+
+
+ggplot(data = dmMeanRawCors, aes(y = LPScor, x = TRTbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("LPS individuals, TRT betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_treatmentLPS.png"), width = 6, height = 4)
+
+ggplot(data = dmMeanRawCors, aes(y = NCcor, x = TRTbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("NC individuals, TRT betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_treatmentNC.png"), width = 6, height = 4)
+
+
+ggplot(data = dmMeanRawCors, aes(y = LPScor, x = agRecLPSbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("LPS individuals, agRec betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_agRecLPS.png"), width = 6, height = 4)
+
+ggplot(data = dmMeanRawCors, aes(y = NCcor, x = agRecNCbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("NC individuals, agRec betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_agRecNC.png"), width = 6, height = 4)
+
+ggplot(data = dmMeanRawCors, aes(y = LPScor, x = groomLPSbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("LPS individuals, groom betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_groomLPS.png"), width = 6, height = 4)
+
+ggplot(data = dmMeanRawCors, aes(y = NCcor, x = groomNCbetaR, group = clusterNames, fill = clusterNames)) +
+  geom_violin(width = .075, alpha = .5) + 
+  geom_point(alpha = .5) + ggtitle("NC individuals, groom betas") +
+  xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_groomNC.png"), width = 6, height = 4)
+
+
+ggplot(data = dmMeanRawCors, aes(y = LPScor, x = clusterID)) +
   geom_point() +
   geom_boxplot()
 
-ggplot(data = dmMeanCors, aes(y = NCcor, x = clusterID)) +
+ggplot(data = dmMeanRawCors, aes(y = NCcor, x = clusterID)) +
   geom_point() +
   geom_boxplot()
 
@@ -1464,6 +1550,334 @@ ggplot(data = dmMeanCors, aes(y = NCcor, x = clusterID)) +
 
 ```
 
+What is the distribution of DM values?
+```{r}
+#For all the clusters, remove the outlier DM values and re-run the correlations
+
+#threshold in number of SDs
+for (dmThreshold in c(4,3,2,1)) {
+  #dmThreshold <- 2
+  
+  totalGenes <- 0
+  
+  rSquared <- vector()
+  justRs <- vector()
+  clusterInfo <- vector()
+  varInfo <- vector()
+  trtInfo <- vector()
+  
+  
+  clusterID <- vector()
+  animalID <- vector()
+  NCcor <- vector()
+  LPScor <- vector()
+  COMBcor <- vector()
+  
+  
+  for (cluster in c("00","02","14","05","06","07")) {
+    #for this cluster
+    #cluster <- "06"
+    
+    #get the raw data
+    sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
+    sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
+    
+    sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
+    sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+    
+    ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
+    numberNAs <- vector()
+    for (r in 1:dim(sge_NC_DMpb_matrix)[1]) {
+      numberNAs[r] <- sum(is.na(sge_NC_DMpb_matrix[r,]))
+    }
+    sge_NC_DMpb_matrix <- sge_NC_DMpb_matrix[numberNAs < 1,]
+    
+    numberNAs <- vector()
+    for (r in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+      numberNAs[r] <- sum(is.na(sge_LPS_DMpb_matrix[r,]))
+    }
+    sge_LPS_DMpb_matrix <- sge_LPS_DMpb_matrix[numberNAs < 1,]
+    
+    
+    ## only use common set of genes - must exist in all matrices (8)
+    geneList <- rownames(table(c(rownames(sge_NC_pbMean_matrix),
+                rownames(sge_NC_DMpb_matrix),
+                rownames(sge_LPS_pbMean_matrix),
+                rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
+                rownames(sge_NC_DMpb_matrix),
+                rownames(sge_LPS_pbMean_matrix),
+                rownames(sge_LPS_DMpb_matrix))) == 4]
+    
+    geneList <- geneList[geneList != "chrMT"]
+    
+    ### CALCULATE THE SD OF DM HERE, AND THEN CUT THOSE GENES FROM GENELIST
+    ncCutoffHi <- mean(rowMeans(sge_NC_DMpb_matrix)) + dmThreshold*sd(rowMeans(sge_NC_DMpb_matrix))
+    ncCutoffLo <- mean(rowMeans(sge_NC_DMpb_matrix)) - dmThreshold*sd(rowMeans(sge_NC_DMpb_matrix))
+    lpsCutoffHi <- mean(rowMeans(sge_LPS_DMpb_matrix)) + dmThreshold*sd(rowMeans(sge_LPS_DMpb_matrix))
+    lpsCutoffLo <- mean(rowMeans(sge_LPS_DMpb_matrix)) - dmThreshold*sd(rowMeans(sge_LPS_DMpb_matrix))
+    
+    outlierDM <- c(names(which(rowMeans(sge_LPS_DMpb_matrix) > lpsCutoffHi)),
+                   names(which(rowMeans(sge_LPS_DMpb_matrix) < lpsCutoffLo)),
+                   names(which(rowMeans(sge_NC_DMpb_matrix) > ncCutoffHi)),
+                   names(which(rowMeans(sge_NC_DMpb_matrix) < ncCutoffLo)))
+    
+    outlierDM <- unique(outlierDM)
+    
+    geneList <- geneList[which(!geneList %in% outlierDM)]
+  
+    
+  
+    #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+    
+    for (fObj in apropos("^sge_[NL][CP]")) {
+      tmpObj <- get(fObj)
+      ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+      tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+      
+      ## fix MO - 77_06 ID
+      if (sum(colnames(tmpObj) == "X77_06") > 0) {
+        colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+      }
+      #sort the columns by ID to match metadata
+      tmpObj <- tmpObj[,order(colnames(tmpObj))]
+      
+      #reassign the temp object to the sge_NC, etc
+      assign(x = fObj, value = tmpObj)
+    }
+    
+    ## generate a dataframe of NC and LPS combined ##
+    sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+    rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+    sge_pbMean_matrix_nested$Row.names <- NULL
+    
+    #and raw means and variances to use in the variance model
+    sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
+    rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
+    sge_DMpb_matrix_nested$Row.names <- NULL
+    
+    indIDs <- colnames(sge_NC_DMpb_matrix)
+    
+    totInds <- length(indIDs)
+    
+  
+    
+    for (variable in c("aggRec","groom","elo")) {
+      #variable <- "aggRec"
+      
+      paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
+                                           (3 + which(betaLocation == variable))])
+      
+      paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
+      paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
+      
+      paulResults$NCsigMean <- paulResults[,28] < 0.10
+      paulResults$LPSsigMean <- paulResults[,29] < 0.10
+    
+      if (variable == "elo") {
+        emrml <- get(paste0("res_full_DMpb_c",cluster))
+      } else {
+        emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+      }
+      
+      
+      meanDMgeneList <-  intersect(rownames(paulResults),rownames(emrml))
+  
+      ### CHECK THIS WITH THE GENE LIST ABOVE, MAYBE USING INTERSECT AS WELL
+      meanDMgeneList <- intersect(geneList,meanDMgeneList)
+      
+          
+      paulResults <- paulResults[rownames(paulResults) %in% meanDMgeneList,]
+      emrml <- emrml[rownames(emrml) %in% meanDMgeneList,]
+      
+      emrml$NCstdBetaDM <- emrml[,3] / sqrt(emrml[,9])
+      emrml$LPSstdBetaDM <- emrml[,4] / sqrt(emrml[,10])
+      
+      emrml$NCsigDM <- emrml[,20] < 0.10
+      emrml$LPSsigDM <- emrml[,21] < 0.10
+      
+      dmpbDataNC <- emrml[,c(22,24)]
+      dmpbDataNC$gene <- rownames(emrml)
+      
+      expDataNC <- paulResults[,c(32,34)]
+      expDataNC$gene <- rownames(paulResults)
+      
+      ncResults <- merge(expDataNC, dmpbDataNC, by = "gene")
+      
+      
+      dmpbDataLPS <- emrml[,c(23,25)]
+      dmpbDataLPS$gene <- rownames(emrml)
+      
+      expDataLPS <- paulResults[,c(33,35)]
+      expDataLPS$gene <- rownames(paulResults)
+      
+      lpsResults <- merge(expDataLPS, dmpbDataLPS, by = "gene")
+      
+  
+      if ( variable != "elo" ) {
+      meanDMr <- cor(ncResults$NCstdBetaMean,ncResults$NCstdBetaDM)
+      justRs <- c(justRs, meanDMr)
+      clusterInfo <- c(clusterInfo,cluster)
+      varInfo <- c(varInfo,variable)
+      trtInfo <- c(trtInfo,"NC")
+  
+      rSquared <- c(rSquared, meanDMr^2)
+    
+      meanDMr <- cor(lpsResults$LPSstdBetaMean,lpsResults$LPSstdBetaDM)
+      justRs <- c(justRs, meanDMr)
+      clusterInfo <- c(clusterInfo,cluster)
+      varInfo <- c(varInfo,variable)
+      trtInfo <- c(trtInfo,"LPS")
+  
+      
+      rSquared <- c(rSquared, meanDMr^2)
+      }
+    
+      
+    
+      if (variable == "elo") {
+          
+          #fdrLvl <- .2
+          
+          emrml$TRTstdBetaDM <- emrml[,2] / sqrt(emrml[,8])
+          emrml$TRTsigDM <- emrml$fdr_eloTrt < fdrLvl
+          
+          paulResults$TRTstdBetaMean <- paulResults[,2] / sqrt(paulResults[,10])
+          paulResults$TRTsigMean <- paulResults[,31] < fdrLvl
+          
+      
+          dmpbDataTRT <- emrml[,c(26,27)]
+          dmpbDataTRT$gene <- rownames(emrml)
+        
+          expDataTRT <- paulResults[,c(36,37)]
+          expDataTRT$gene <- rownames(paulResults)
+        
+          trtResults <- merge(expDataTRT, dmpbDataTRT, by = "gene")
+          
+          
+          meanDMr <- cor(trtResults$TRTstdBetaMean,trtResults$TRTstdBetaDM)
+          justRs <- c(justRs, meanDMr)
+          clusterInfo <- c(clusterInfo,cluster)
+          varInfo <- c(varInfo,"treatment")
+          trtInfo <- c(trtInfo,"Combined")
+  
+          rSquared <- c(rSquared, meanDMr^2)
+  
+      }
+    }
+    
+  
+    
+    #for each individual, get the R of NC, LPS, and combined
+    for (i in 1:length(indIDs)) {
+      #i <- 18
+      
+      rLPS <- cor(sge_LPS_DMpb_matrix[,i],sge_LPS_pbMean_matrix[,i])
+      rNC <- cor(sge_NC_DMpb_matrix[,i],sge_NC_pbMean_matrix[,i])
+      rCmb <- cor(c(sge_LPS_DMpb_matrix[,i],sge_NC_DMpb_matrix[,i]),
+                  c(sge_LPS_pbMean_matrix[,i],sge_LPS_pbMean_matrix[,i]))
+  
+      clusterID <- c(clusterID,cluster)
+      animalID <- c(animalID,indIDs[i])
+      NCcor <- c(NCcor,rNC)
+      LPScor <- c(LPScor,rLPS)
+      COMBcor <- c(COMBcor,rCmb)
+      
+    }
+   
+    totalGenes <- totalGenes + length(geneList)
+     
+  }
+  
+  genesPerCellType <- totalGenes/6
+  
+  dmMeanBetaCors <- data.frame(justRs,clusterInfo,varInfo,trtInfo)
+  
+  dmMeanRawCors <- data.frame(clusterID,animalID,NCcor,LPScor,COMBcor)
+  
+  
+  dmMeanRawCors$agRecNCbetaR <- 0
+  dmMeanRawCors$agRecLPSbetaR <- 0
+  dmMeanRawCors$groomNCbetaR <- 0
+  dmMeanRawCors$groomLPSbetaR <- 0
+  dmMeanRawCors$TRTbetaR <- 0
+  
+  for (r in 1:dim(dmMeanRawCors)[1]) {
+    #which cluster is this row from
+    cluster <- dmMeanRawCors$clusterID[r]
+    
+    #for columns 6->10, fill in beta R's from the dmMeanBeta object
+    dmMeanRawCors[r,6:10] <- subset(dmMeanBetaCors, clusterInfo == cluster)$justRs
+  }
+  
+  #add cell names
+  dmMeanRawCors$clusterNames <- dmMeanRawCors$clusterID
+  
+  dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "00", replacement = "CD8")
+  dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "02", replacement = "NK")
+  dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "14", replacement = "CD4")
+  dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "05", replacement = "B")
+  dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "06", replacement = "CD14lo")
+  dmMeanRawCors$clusterNames <- str_replace(dmMeanRawCors$clusterNames, pattern = "07", replacement = "CD14hi")
+  
+  
+  ggplot(data = dmMeanRawCors, aes(y = COMBcor, x = clusterID)) +
+    geom_point() +
+    geom_boxplot()
+  
+  ggplot(data = dmMeanRawCors, aes(y = COMBcor, x = TRTbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + 
+    geom_point(alpha = .5) + ggtitle("LPS+NC individuals, TRT betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_treatmentComb_cutoff",dmThreshold,".png"), width = 6, height = 4)
+  
+  
+  ggplot(data = dmMeanRawCors, aes(y = LPScor, x = TRTbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + 
+    geom_point(alpha = .5) + ggtitle("LPS individuals, TRT betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_treatmentLPS_cutoff",dmThreshold,".png"), width = 6, height = 4)
+  
+  ggplot(data = dmMeanRawCors, aes(y = NCcor, x = TRTbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + 
+    geom_point(alpha = .5) + ggtitle("NC individuals, TRT betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_treatmentNC_cutoff",dmThreshold,".png"), width = 6, height = 4)
+  
+  
+  
+  ggplot(data = dmMeanRawCors, aes(y = LPScor, x = agRecLPSbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + #xlim(c(-.3,0)) + ylim(c(-.15,.15)) +
+    geom_point(alpha = .5) + ggtitle("LPS individuals, agRec betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_agRecLPS_cutoff",dmThreshold,".png"), width = 6, height = 4)
+  
+  ggplot(data = dmMeanRawCors, aes(y = NCcor, x = agRecNCbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + #xlim(c(-.3,0)) + ylim(c(-.15,.15)) +
+    geom_point(alpha = .5) + ggtitle("NC individuals, agRec betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_agRecNC_cutoff",dmThreshold,".png"), width = 6, height = 4)
+  
+  ggplot(data = dmMeanRawCors, aes(y = LPScor, x = groomLPSbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + #xlim(c(-.3,0)) + ylim(c(-.15,.15)) +
+    geom_point(alpha = .5) + ggtitle("LPS individuals, groom betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_groomLPS_cutoff",dmThreshold,".png"), width = 6, height = 4)
+  
+  ggplot(data = dmMeanRawCors, aes(y = NCcor, x = groomNCbetaR, group = clusterNames, fill = clusterNames)) +
+    geom_violin(width = .075, alpha = .5) + #xlim(c(-.3,0)) + ylim(c(-.15,.15)) +
+    geom_point(alpha = .5) + ggtitle("NC individuals, groom betas", 
+                                     subtitle = paste0("dropped genes >",dmThreshold,"*sd from avgDM, n=",genesPerCellType)) +
+    xlab("cell type beta from mean ~ beta DM R's") + ylab("individual level Mean~DM correlations, raw")
+  ggsave(paste0(workDir,"figures/dm_Mean_correlation_vPlot_groomNC_cutoff",dmThreshold,".png"), width = 6, height = 4)
+}
+
+```
 
 
 
@@ -2362,23 +2776,391 @@ write.table(behaveGSEA, file=paste0(workDir,"gsea_All_variables_pathways.txt"),
 ```
 
 
-do the underlying data, on an individual by individual basis, reflect the same negative correlation between DMpb and pbMean?
+# Behavioral Interaction with LPS -- difference in beta method
 ```{r}
-cellType <- vector()
-DMpbMeanR <- vector()
-DMpbMeanP <- vector()
-indID <- vector()
-NCorLPS <- vector()
+
+## get some metadata ##
+metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
+
+# this file is also in SGE_DM/dataFiles
+metadata[1,1] <- 'Mo'
+metadata <- metadata[order(metadata$ID),]
+
+metadata <- metadata[metadata$ID %in% indIDs,]
+
+## make sure metadata order matches data frames ##
+all.equal(metadata$ID,colnames(sge_NC_DMpb_matrix))
+
+## run a nested model with trt, and age and elo nested within trt ##
+## elo and age have to be mean centered for nested model ##
+metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
+#metadata$elo_centered <- metadata$elo - mean(metadata$elo)
+metadata$age_centered <- scale(metadata$age, center = T, scale = F)
+#metadata$age_centered <- metadata$age - mean(metadata$age)
+
+behaveData <- read.table(paste0(workDir,"data/SGEII_METADATA_MASTER.txt"), header = T)
+
+#phase 1 only
+behaveData <- subset(behaveData, phase == 1)
+
+#animals we need data for
+# behave data is 2 character upper, genomic data is 4 char upper/lower
+needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
+
+#limit behavioral data to correct 45 individs
+behaveData <- subset(behaveData, ID %in% needIDs)
+
+#sort by ID
+behaveData <- behaveData[order(behaveData$ID),]
+
+#get the important variables, centered
+metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
+metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
+metadata$groom_cent <- behaveData$gc.overall.groom
 
 
+#run emmreml models again, but this time across NC and LPS, subset first on genes that do show a significant treatment effect (maybe, 0.20 qvalue)
 
-#loop through clusters
+#for those genes, is there a difference in behavior~variance in or outside of LPS
 
-#loop through individuals
+pvalCutoff <- 0.05
 
+#only run cluster 5 as a test
+for (cluster in c("00","14","02","05","06","07")) {
+  #cluster <- "05"
+  
+  sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
+  sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
+  
+  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
+  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  
+  
+  ##run this for agRec and for groom
+  
+  for (variable in c("agRec","groom")){
+    #variable <- "groom"
+
+    assign(x = paste0("res_full_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
+        
+    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_",variable,"_emmreml")))
+    
+    trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
+
+    ### only want to use genes that were significant in the treatment condition ~0.20 FDR
+    # get the list of genes from that emreml result
+    sigGenes <- rownames(trtEmrml)[trtEmrml$p_value_trtLPS < pvalCutoff]
+    
+    
+    # #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+    # for (fObj in apropos("^sge_[NL][CP]")) {
+    #   tmpObj <- get(fObj)
+    #   ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    #   tmpObj <- subset(tmpObj, rownames(tmpObj) %in% sigGenes)
+    #   
+    #   ## fix MO - 77_06 ID
+    #   if (sum(colnames(tmpObj) == "X77_06") > 0) {
+    #     colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    #   }
+    #   #sort the columns by ID to match metadata
+    #   tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    #   
+    #   #reassign the temp object to the sge_NC, etc
+    #   assign(x = fObj, value = tmpObj)
+    # }
+    
+    varEmrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    
+    #varEmrml$diffBeta <- varEmrml[,4] / sqrt(varEmrml[,10]) - varEmrml[,3] / sqrt(varEmrml[,9])
+    varEmrml$diffBeta <- varEmrml[,4]  - varEmrml[,3]
+    
+    varEmrmlSig <- varEmrml[rownames(varEmrml) %in% sigGenes,]
+    
+    ggplot() +
+      geom_histogram(aes(x = varEmrml$diffBeta)) +
+      geom_histogram(aes(x = varEmrmlSig$diffBeta), fill = "red")
+    
+    #which genes have betas beyond 3 std. dev
+    upperLim <- mean(varEmrmlSig$diffBeta) + 3*sd(varEmrmlSig$diffBeta)
+    lowerLim <- mean(varEmrmlSig$diffBeta) - 3*sd(varEmrmlSig$diffBeta)
+    
+    diffBetaGenes <- subset(varEmrmlSig, diffBeta < lowerLim | diffBeta > upperLim)
+    
+    #if there are any genes
+    if ( dim(diffBetaGenes)[1] > 0 ) {
+    #for all the diff genes
+
+      for (g in 1:dim(diffBetaGenes)[1]) {
+        
+        geneName <- rownames(diffBetaGenes)[g]
+        
+        NCvars <- sge_NC_DMpb_matrix[rownames(sge_NC_DMpb_matrix) == rownames(diffBetaGenes)[g],]
+        LPSvars <- sge_LPS_DMpb_matrix[rownames(sge_LPS_DMpb_matrix) == rownames(diffBetaGenes)[g],]
+        
+        ggplot() +
+          geom_histogram(aes(x = unlist(NCvars)), fill = "blue", alpha = 1/3) +
+          geom_histogram(aes(x = unlist(LPSvars)), fill = "red", alpha = 1/3)
+    
+        #only need metadata for these individuals
+        sigMetadata <- metadata[metadata$ID %in% names(NCvars),]
+        
+        if (variable == "agRec") {
+          sigMetadata <- sigMetadata[,c(1:4,8)]
+        } else {
+          sigMetadata <- sigMetadata[,c(1:4,9)]
+        }
+        
+        sigMetadata$LPSvar <- 0
+        sigMetadata$NCvar <- 0
+        
+        for (i in 1:dim(sigMetadata)[1]) {
+          varID <- which(names(NCvars) == sigMetadata$ID[i])
+          sigMetadata$LPSvar[i] <- as.numeric(LPSvars[varID])
+          sigMetadata$NCvar[i] <- as.numeric(NCvars[varID])
+        }
+        
+        ggplot() +
+          geom_point(aes(x = sigMetadata[,5], y = sigMetadata$NCvar), col = "blue") +
+          geom_point(aes(x = sigMetadata[,5], y = sigMetadata$LPSvar), col = "red") +
+          geom_smooth(aes(x = sigMetadata[,5], y = sigMetadata$NCvar), method = "lm", col = "blue") +
+          geom_smooth(aes(x = sigMetadata[,5], y = sigMetadata$LPSvar), method = "lm", col = "red") +
+          xlab(paste0(variable," (Centered)")) + ylab("DMpb (Red = LPS, Blue = NC)") +
+          ggtitle(paste0("NC-LPS interaction in ",geneName," metric:",variable))
+        
+        ggsave(paste0(workDir,"figures/responseEffects/interaction_xy_c",cluster,"_",variable,"_",geneName,".png"), 
+             width = 8, height = 6)
+      }
+    }
+
+  }
+}
 
 
 
 ```
+## Run an Emreml model where "y" is just the difference in variance, not the raw variance
+```{r emmreml for diff in var}
+#number of permutations
+iters <- 100
+pvalCutoff <- 0.01
 
+#only run cluster 7 as a test
+for (cluster in c("00","14","02","05","06","07")) {
+  #cluster <- "14"
+  
+  sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
+  sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
+  
+  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
+  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
+  
+  trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
+
+  ### only want to use genes that were significant in the treatment condition ~0.20 FDR
+  # get the list of genes from that emreml result
+  sigGenes <- rownames(trtEmrml)[trtEmrml$p_value_trtLPS < pvalCutoff]
+
+  geneList <- sigGenes
+
+  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+  
+  for (fObj in apropos("^sge_[NL][CP]")) {
+    tmpObj <- get(fObj)
+    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+    
+    ## fix MO - 77_06 ID
+    if (sum(colnames(tmpObj) == "X77_06") > 0) {
+      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    }
+    #sort the columns by ID to match metadata
+    tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    
+    #reassign the temp object to the sge_NC, etc
+    assign(x = fObj, value = tmpObj)
+  }
+  
+  
+  ## generate a dataframe of NC and LPS combined ##
+  sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+  rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+  sge_pbMean_matrix_nested$Row.names <- NULL
+  
+  #and raw means and variances to use in the variance model
+  sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
+  rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
+  sge_DMpb_matrix_nested$Row.names <- NULL
+  
+  indIDs <- colnames(sge_NC_DMpb_matrix)
+
+  
+  #calculate the DMdiff matrix | LPS - NC
+  sge_DMdiff_matrix <- sge_LPS_DMpb_matrix - sge_NC_DMpb_matrix
+  
+  
+  #pick metadata based on samples in the matrix
+  
+  ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
+  ## get some metadata ##
+  metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
+  # this file is also in SGE_DM/dataFiles
+  metadata[1,1] <- 'Mo'
+  metadata <- metadata[order(metadata$ID),]
+  
+  metadata <- metadata[metadata$ID %in% indIDs,]
+  
+  ## make sure metadata order matches data frames ##
+  all.equal(metadata$ID,colnames(sge_NC_DMpb_matrix))
+
+  ## run a nested model with trt, and age and elo nested within trt ##
+  ## elo and age have to be mean centered for nested model ##
+  metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
+  #metadata$elo_centered <- metadata$elo - mean(metadata$elo)
+  metadata$age_centered <- scale(metadata$age, center = T, scale = F)
+  #metadata$age_centered <- metadata$age - mean(metadata$age)
+  
+  behaveData <- read.table(paste0(workDir,"data/SGEII_METADATA_MASTER.txt"), header = T)
+  
+  #phase 1 only
+  behaveData <- subset(behaveData, phase == 1)
+  
+  #animals we need data for
+  # behave data is 2 character upper, genomic data is 4 char upper/lower
+  needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
+  
+  #limit behavioral data to correct 45 individs
+  behaveData <- subset(behaveData, ID %in% needIDs)
+  
+  #sort by ID
+  behaveData <- behaveData[order(behaveData$ID),]
+  
+  #get the important variables, centered
+  metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
+  metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
+  metadata$groom_cent <- behaveData$gc.overall.groom
+  
+  
+  
+  #need to run the loop locally
+  
+  ## regress out group effects from DMpb ##
+    design <- model.matrix(~metadata$group)
+    fit <-lmFit(sge_DMdiff_matrix,design)
+    intercepts=data.frame(eBayes(fit))[,1]
+    resid_DMdiff=apply(residuals.MArrayLM(object=fit, sge_DMdiff_matrix),2,function(x){x+intercepts})
+    
+    ######Now the other behavioral metrics
+    ###### | AgRec | Groom
+  
+    
+    #Agonism Received
+    design = model.matrix(~aggRec_cent + age_centered, data=metadata)
+    
+    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+    res_full=resid_DMdiff[,1:(3*ncol(design))]
+    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+    
+    #Declare object random_effects to store in it the individual-wise u random effects
+    random_effects=resid_DMdiff[,1:length(indIDs)]
+    colnames(random_effects)=metadata[1:length(indIDs),'ID']
+    
+    #Define matrix Z describing the sample-to-individual mapping
+    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+    # correcting capitalization so it matches
+    rownames(K)[34] <- 'JE11'
+    colnames(K)[34] <- 'JE11'
+    K=K[unique(metadata$ID),unique(metadata$ID)]
+    
+    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+    rownames(Z)=metadata$ID
+    colnames(Z)=colnames(K)
+    for(i in 1:ncol(Z)){
+      set=which(metadata$ID == colnames(Z)[i])
+      Z[set,i]=1
+    }
+    
+    for(i in 1:nrow(resid_DMdiff))
+    {
+      emma=emmreml(y=resid_DMdiff[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+      random_effects[i,]=t(emma$uhat)
+      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+    }
+    
+    assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMdiff_c",cluster))
+    #plotModelHists(get(paste0("res_full_aggRec_DMdiff_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMdiff_model_AgRec_c",cluster))
+    
+    ggplot() +
+     geom_histogram(aes(x = res_full[,8]), bins = 100) + xlab("pvalues") +
+          ggtitle(paste0("LPS - NC model ",cluster,", agRec"), subtitle = paste0("genes below ",pvalCutoff,", n = ",dim(res_full)[1]))
+    ggsave(paste0(workDir,"figures/responseEffects/pval_hist_",cluster,"_agRec.png"), 
+             width = 6, height = 4)
+    
+    #Overall Grooming
+    
+    design = model.matrix(~groom_cent + age_centered, data=metadata)
+    
+    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
+    res_full=resid_DMdiff[,1:(3*ncol(design))]
+    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
+    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
+    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
+    
+    #Declare object random_effects to store in it the individual-wise u random effects
+    random_effects=resid_DMdiff[,1:length(indIDs)]
+    colnames(random_effects)=metadata[1:length(indIDs),'ID']
+    
+    #Define matrix Z describing the sample-to-individual mapping
+    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+    # correcting capitalization so it matches
+    rownames(K)[34] <- 'JE11'
+    colnames(K)[34] <- 'JE11'
+    K=K[unique(metadata$ID),unique(metadata$ID)]
+    
+    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+    rownames(Z)=metadata$ID
+    colnames(Z)=colnames(K)
+    for(i in 1:ncol(Z)){
+      set=which(metadata$ID == colnames(Z)[i])
+      Z[set,i]=1
+    }
+    
+    for(i in 1:nrow(resid_DMdiff))
+    {
+      emma=emmreml(y=resid_DMdiff[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+      random_effects[i,]=t(emma$uhat)
+      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+    }
+    
+    assign(value = data.frame(res_full), x = paste0("res_full_groom_DMdiff_c",cluster))
+    #plotModelHists(get(paste0("res_full_groom_DMdiff_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMdiff_model_groom_c",cluster))
+    
+    ggplot() +
+     geom_histogram(aes(x = res_full[,8]), bins = 100) + xlab("pvalues") +
+          ggtitle(paste0("LPS - NC model ",cluster,", groom"), subtitle = paste0("genes below ",pvalCutoff,", n = ",dim(res_full)[1]))
+    ggsave(paste0(workDir,"figures/responseEffects/pval_hist_",cluster,"_groom.png"), 
+             width = 6, height = 4)
+
+  
+}
+
+ggplot() +
+  geom_histogram(aes(x = res_full_aggRec_DMdiff_c14$p_value_aggRec_cent), bins = 100)
+
+ggplot() +
+  geom_histogram(aes(x = res_full_groom_DMdiff_c14$p_value_groom_cent), bins = 100)
+
+ggplot() +
+  geom_histogram(aes(x = res_full_aggRec_DMdiff_c14$p_value_age_centered), bins = 100)
+
+ggplot() +
+  geom_histogram(aes(x = res_full_groom_DMdiff_c14$p_value_age_centered), bins = 100)
+
+```
 
