@@ -27,6 +27,9 @@ sge_pbmc_NC <- subset(sge_pbmc, subset = trt == 'NC')
 sge_pbmc_LPS <- subset(sge_pbmc, subset = trt == 'LPS')
 rm(sge_pbmc)
 
+#set minimum pseudobulk percentile
+minGEpercentile <- 25
+
 #for NC and LPS separately:
 
 #NC first
@@ -63,9 +66,41 @@ for (clusterNum in c(0:7,14)) {
     }
     
     assign(value = ind_list, x = paste("ind_list_",treatment, sep=""))
+    
+    ###filter the mean here
+    minGEfilt
+    
+    rna <-  as.SingleCellExperiment(cObj, assay="RNA")
+    names(assays(rna))
+    rna <- addPerCellQC(rna)
+    rna <- addPerFeatureQC(rna)
+    rna_filt <- rna
+    rna_filt <- computeSumFactors(rna_filt)
+    rna_filt$size_factor <- sizeFactors(rna_filt)
+    colData(rna_filt)$group <- as.factor(colData(rna_filt)$group)
+    rna_filt <- logNormCounts(rna_filt, pseudo_count = 1)
+    normalized_data <- exprs(rna_filt)
+    meta_data <- as.data.frame(colData(rna_filt))
+    meta_data$sample_condition <- paste(meta_data$ID, meta_data$trt, sep="")
+    sample_colname <- "sample_condition"
+    IDs <- as.data.frame(meta_data)[, sample_colname]
+    unique_ID_list <- as.list(unique(IDs))
+    pseudobulk <- as.data.frame(lapply(unique_ID_list, FUN = function(x){rowMeans(normalized_data[,IDs == x, drop = FALSE])}))
+    colnames(pseudobulk) <- unique(IDs)
+    rownames(pseudobulk) <- rownames(normalized_data)
+    pseudobulk <- as.data.frame(pseudobulk)
+    object_pseudobulkMeans <- pseudobulk
+    
+    minGEthresh <- quantile(rowMeans(object_pseudobulkMeans), minGEpercentile/100)
+    geneList <- rownames(object_pseudobulkMeans)[rowMeans(object_pseudobulkMeans) > minGEthresh]
+    
+    assign(value = geneList, x = paste("geneList_",treatment, sep=""))
+    
   }
   
   final_ind_list <- ind_list_NC[ind_list_NC %in% ind_list_LPS]
+  
+  final_geneList <- geneList_NC[geneList_NC %in% geneList_LPS]
   
   
   for(treatment in c("NC","LPS")) {
@@ -103,11 +138,21 @@ for (clusterNum in c(0:7,14)) {
       rownames(pseudobulk) <- rownames(normalized_data)
       pseudobulk <- as.data.frame(pseudobulk)
       object_pseudobulkMeans <- pseudobulk
+      
+      #limit this by geneList
+      object_pseudobulkMeans <- object_pseudobulkMeans[rownames(object_pseudobulkMeans) %in% geneList,]
+      
+      
       assign(value = object_pseudobulkMeans, x = paste(i,"_",treatment,"_counts_c",cNumDouble,"_pbMean", sep=""))
       
       #move the counts for JUST THIS CLUSTER to another object for mean, var, DM calcs
       tmp2 <- as.matrix(GetAssayData(obj, assay = "RNA", slot = "counts"))    
+      #limit this by geneList
+      tmp2 <- tmp2[rownames(tmp2) %in% geneList,]
+      
+      
       assign(value = tmp2, x = paste(i,"_",treatment,"_counts_c",cNumDouble, sep=""))
+      
       
       # now calculate mean, cv2, var, and DM
       meanGenes <- rowMeans(tmp2)
@@ -199,7 +244,7 @@ for (clusterNum in c(0:7,14)) {
       
       assign(value = tmpOutput, x = paste0("sge_",treatment,"_",cNumDouble,"_",metric,"_matrix"))
       
-      write.table(tmpOutput,file=paste0(workDir,paste0("sge_",treatment,"_c",cNumDouble,"_",metric,"_matrix")),row.names=T,col.names=T,quote=F,sep='\t')
+      write.table(tmpOutput,file=paste0(workDir,paste0("sge_",treatment,"_c",cNumDouble,"_",metric,"_geFiltq",minGEpercentile,"_matrix")),row.names=T,col.names=T,quote=F,sep='\t')
     }
     
   }
