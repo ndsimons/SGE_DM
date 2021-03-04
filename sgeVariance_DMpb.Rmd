@@ -3247,3 +3247,159 @@ ggplot() +
 
 ```
 
+
+## Using Joaqiun's code to compare nested Betas as interaction Betas
+```{r interaction betas}
+# library(limma)
+# library(edgeR)
+# 
+# reads <- read.table("reads.txt",check.names=FALSE)
+# cols <- read.table("metadata.txt")
+# 
+# dge <- DGEList(counts=reads)
+# dge <- calcNormFactors(dge)
+# 
+# ### First, let us get the interaction directly from the design;:
+# cols$Condition=factor(cols$Condition,levels=c("NC","LPS"))
+# 
+# 
+# design = model.matrix(~Condition+Elo*Condition,data=cols)
+# v <- voom(dge,design,plot=TRUE)
+# fit <-lmFit(v,design)
+# fit <- eBayes(fit)
+# sdevs=sqrt(fit$s2.post) * fit$stdev.unscaled
+# betas=fit$coefficients
+# ts=fit$t
+# 
+# interaction=data.frame(
+# beta=betas[,"ConditionLPS:Elo"],
+# sdev=sdevs[,"ConditionLPS:Elo"],
+# t=ts[,"ConditionLPS:Elo"]
+# )
+# 
+# ### Now, we reconstruct it from a nested design as a difference
+# ### Between nested effects, propagating the standard error from
+# ### the standard errors of the nested effects themselves:
+# 
+# 
+# design = model.matrix(~Condition+Elo:Condition,data=cols)
+# v <- voom(dge,design,plot=TRUE)
+# fit <-lmFit(v,design)
+# fit <- eBayes(fit)
+# 
+# sdevs=sqrt(fit$s2.post) * fit$stdev.unscaled
+# betas=fit$coefficients
+
+#for grooming and agRec
+
+# interaction_rebuilt_from_nested_design=data.frame(beta=betas[,"ConditionLPS:Elo"]-betas[,"ConditionNC:Elo"],
+#                                                   sdev=sqrt(sdevs[,"ConditionLPS:Elo"]^2+sdevs[,"ConditionNC:Elo"]^2))
+# 
+# interaction_rebuilt_from_nested_design$t=interaction_rebuilt_from_nested_design$beta/interaction_rebuilt_from_nested_design$sdev
+# 
+# for(i in 1:3)
+# {
+# print(max(abs(interaction[,1]-interaction_rebuilt_from_nested_design[,1])))
+# }
+# They match.
+
+
+for (cluster in c("00","14","02","05","06","07")) {
+  #cluster <- "05"
+  
+  #sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
+  #sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
+  
+  #sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
+  #sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  
+  
+  ##run this for agRec and for groom
+  
+    variable <- "groom"
+
+    assign(x = paste0("res_full_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
+        
+    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_",variable,"_emmreml")))
+    
+    trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
+    behaveEmrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    
+    #subtract betas
+    behaveEmrml$beta_trtInteraction.groom_cent <- behaveEmrml$beta_trtLPS.groom_cent - behaveEmrml$beta_trtNC.groom_cent
+    
+    #combine stdevs
+    behaveEmrml$sdev_trtInteraction.groom_cent <- sqrt(behaveEmrml$sdev_trtLPS.groom_cent +
+                                                         behaveEmrml$sdev_trtNC.groom_cent)
+    
+    #get t-values
+    behaveEmrml$tVal_trtInteraction.groom_cent <- behaveEmrml$beta_trtInteraction.groom_cent /
+                                                    behaveEmrml$sdev_trtInteraction.groom_cent
+    
+    #tval -> pval (n=??)
+    behaveEmrml$p_value_trtInteraction.groom_cent <- 2*pt(-abs(behaveEmrml$tVal_trtInteraction.groom_cent), df=Inf)
+    
+    write.table(behaveEmrml, file = paste0(workDir,"cluster/results/results_c",
+                                           cluster,"_",variable,"_emmreml_wInteraction"))
+    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+           value = behaveEmrml)
+    
+    ggplot() +
+      geom_histogram(aes(x = behaveEmrml$p_value_trtInteraction.groom_cent), bins = 100) +
+      xlab("p-value: NC*LPS interaction w/groom")
+    
+    ggsave(paste0(figDir,"c",cluster,"/emmreml_hist_",variable,"_model_c",cluster,
+                  "_p_value_interaction",variable,".png"), width = 6, height = 4)
+
+    
+    variable <- "agRec"
+
+    assign(x = paste0("res_full_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
+        
+    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_",variable,"_emmreml")))
+    
+    trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
+    behaveEmrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    
+    #subtract betas
+    behaveEmrml$beta_trtInteraction.aggRec_cent <- behaveEmrml$beta_trtLPS.aggRec_cent - behaveEmrml$beta_trtNC.aggRec_cent
+    
+    #combine stdevs
+    behaveEmrml$sdev_trtInteraction.aggRec_cent <- sqrt(behaveEmrml$sdev_trtLPS.aggRec_cent +
+                                                         behaveEmrml$sdev_trtNC.aggRec_cent)
+    
+    #get t-values
+    behaveEmrml$tVal_trtInteraction.aggRec_cent <- behaveEmrml$beta_trtInteraction.aggRec_cent /
+                                                    behaveEmrml$sdev_trtInteraction.aggRec_cent
+    
+    #tval -> pval (n=??)
+    behaveEmrml$p_value_trtInteraction.aggRec_cent <- 2*pt(-abs(behaveEmrml$tVal_trtInteraction.aggRec_cent), df=Inf)
+    
+    write.table(behaveEmrml, file = paste0(workDir,"cluster/results/results_c",
+                                           cluster,"_",variable,"_emmreml_wInteraction"))
+    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+           value = behaveEmrml)
+    
+    ggplot() +
+      geom_histogram(aes(x = behaveEmrml$p_value_trtInteraction.aggRec_cent), bins = 100) +
+      xlab("p-value: NC*LPS interaction w/agRec")
+    
+    ggsave(paste0(figDir,"c",cluster,"/emmreml_hist_",variable,"_model_c",cluster,
+                  "_p_value_interaction",variable,".png"), width = 6, height = 4)
+  
+}
+
+
+```
+
+```{r interaction GSEA}
+
+
+
+```
+
