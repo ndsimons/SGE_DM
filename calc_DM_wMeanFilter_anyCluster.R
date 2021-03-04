@@ -30,6 +30,10 @@ rm(sge_pbmc)
 #set minimum pseudobulk percentile
 minGEpercentile <- 25
 
+
+### NEED TO LIMIT THE GENE OUTPUT TO ONLY THE GENES TESTED
+### MAKE SURE THE ROWNAMES ARE THERE
+
 #for NC and LPS separately:
 
 #NC first
@@ -68,7 +72,6 @@ for (clusterNum in c(0:7,14)) {
     assign(value = ind_list, x = paste("ind_list_",treatment, sep=""))
     
     ###filter the mean here
-    minGEfilt
     
     rna <-  as.SingleCellExperiment(cObj, assay="RNA")
     names(assays(rna))
@@ -146,7 +149,7 @@ for (clusterNum in c(0:7,14)) {
       assign(value = object_pseudobulkMeans, x = paste(i,"_",treatment,"_counts_c",cNumDouble,"_pbMean", sep=""))
       
       #move the counts for JUST THIS CLUSTER to another object for mean, var, DM calcs
-      tmp2 <- as.matrix(GetAssayData(obj, assay = "RNA", slot = "counts"))    
+      tmp2 <- as.matrix(GetAssayData(obj, assay = "RNA", slot = "counts"))
       #limit this by geneList
       tmp2 <- tmp2[rownames(tmp2) %in% geneList,]
       
@@ -158,13 +161,17 @@ for (clusterNum in c(0:7,14)) {
       meanGenes <- rowMeans(tmp2)
       CV2Genes <- apply(tmp2 , 1, var) / meanGenes^2
       varGenes <- rowVars(as.matrix(tmp2))
-      names(meanGenes) <- rownames(tmp2)
-      names(CV2Genes) <- rownames(tmp2)
+      #names(meanGenes) <- rownames(tmp2)
+      #names(CV2Genes) <- rownames(tmp2)
       names(varGenes) <- rownames(tmp2)
       DMlevels <- DM(meanGenes, CV2Genes)
       
       CV2pseudoGenes <- apply(tmp2 , 1, var) / pseudobulk^2
       DMpb <- DM(pseudobulk, CV2pseudoGenes)
+      
+      CV2pseudoGenes <- apply(tmp2 , 1, var) / object_pseudobulkMeans^2
+      DMpb <- DM(object_pseudobulkMeans, CV2pseudoGenes)
+      
       
       names(DMpb) <- rownames(tmp2)
       
