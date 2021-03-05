@@ -3415,9 +3415,3 @@ for (behavior in c("agRec","groom")) {
 }
 ```
 
-
-## Which genes underlie the differences in these pathways
-```{r}
-
-```
-
