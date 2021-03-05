@@ -2859,393 +2859,6 @@ write.table(behaveGSEA, file=paste0(workDir,"gsea_All_variables_pathways.txt"),
 ```
 
 
-# Behavioral Interaction with LPS -- difference in beta method
-```{r}
-
-## get some metadata ##
-metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
-
-# this file is also in SGE_DM/dataFiles
-metadata[1,1] <- 'Mo'
-metadata <- metadata[order(metadata$ID),]
-
-metadata <- metadata[metadata$ID %in% indIDs,]
-
-## make sure metadata order matches data frames ##
-all.equal(metadata$ID,colnames(sge_NC_DMpb_matrix))
-
-## run a nested model with trt, and age and elo nested within trt ##
-## elo and age have to be mean centered for nested model ##
-metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
-#metadata$elo_centered <- metadata$elo - mean(metadata$elo)
-metadata$age_centered <- scale(metadata$age, center = T, scale = F)
-#metadata$age_centered <- metadata$age - mean(metadata$age)
-
-behaveData <- read.table(paste0(workDir,"data/SGEII_METADATA_MASTER.txt"), header = T)
-
-#phase 1 only
-behaveData <- subset(behaveData, phase == 1)
-
-#animals we need data for
-# behave data is 2 character upper, genomic data is 4 char upper/lower
-needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
-
-#limit behavioral data to correct 45 individs
-behaveData <- subset(behaveData, ID %in% needIDs)
-
-#sort by ID
-behaveData <- behaveData[order(behaveData$ID),]
-
-#get the important variables, centered
-metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
-metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
-metadata$groom_cent <- behaveData$gc.overall.groom
-
-
-#run emmreml models again, but this time across NC and LPS, subset first on genes that do show a significant treatment effect (maybe, 0.20 qvalue)
-
-#for those genes, is there a difference in behavior~variance in or outside of LPS
-
-pvalCutoff <- 0.05
-
-#only run cluster 5 as a test
-for (cluster in c("00","14","02","05","06","07")) {
-  #cluster <- "05"
-  
-  sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
-  sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
-  
-  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
-  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
-  
-  
-  
-  ##run this for agRec and for groom
-  
-  for (variable in c("agRec","groom")){
-    #variable <- "groom"
-
-    assign(x = paste0("res_full_DMpb_c",cluster),
-           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
-        
-    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
-           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_",variable,"_emmreml")))
-    
-    trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
-
-    ### only want to use genes that were significant in the treatment condition ~0.20 FDR
-    # get the list of genes from that emreml result
-    sigGenes <- rownames(trtEmrml)[trtEmrml$p_value_trtLPS < pvalCutoff]
-    
-    
-    # #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
-    # for (fObj in apropos("^sge_[NL][CP]")) {
-    #   tmpObj <- get(fObj)
-    #   ## subset mean and variance data frames to include only the genes present in the DM data frame ##
-    #   tmpObj <- subset(tmpObj, rownames(tmpObj) %in% sigGenes)
-    #   
-    #   ## fix MO - 77_06 ID
-    #   if (sum(colnames(tmpObj) == "X77_06") > 0) {
-    #     colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
-    #   }
-    #   #sort the columns by ID to match metadata
-    #   tmpObj <- tmpObj[,order(colnames(tmpObj))]
-    #   
-    #   #reassign the temp object to the sge_NC, etc
-    #   assign(x = fObj, value = tmpObj)
-    # }
-    
-    varEmrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
-    
-    #varEmrml$diffBeta <- varEmrml[,4] / sqrt(varEmrml[,10]) - varEmrml[,3] / sqrt(varEmrml[,9])
-    varEmrml$diffBeta <- varEmrml[,4]  - varEmrml[,3]
-    
-    varEmrmlSig <- varEmrml[rownames(varEmrml) %in% sigGenes,]
-    
-    ggplot() +
-      geom_histogram(aes(x = varEmrml$diffBeta)) +
-      geom_histogram(aes(x = varEmrmlSig$diffBeta), fill = "red")
-    
-    #which genes have betas beyond 3 std. dev
-    upperLim <- mean(varEmrmlSig$diffBeta) + 3*sd(varEmrmlSig$diffBeta)
-    lowerLim <- mean(varEmrmlSig$diffBeta) - 3*sd(varEmrmlSig$diffBeta)
-    
-    diffBetaGenes <- subset(varEmrmlSig, diffBeta < lowerLim | diffBeta > upperLim)
-    
-    #if there are any genes
-    if ( dim(diffBetaGenes)[1] > 0 ) {
-    #for all the diff genes
-
-      for (g in 1:dim(diffBetaGenes)[1]) {
-        
-        geneName <- rownames(diffBetaGenes)[g]
-        
-        NCvars <- sge_NC_DMpb_matrix[rownames(sge_NC_DMpb_matrix) == rownames(diffBetaGenes)[g],]
-        LPSvars <- sge_LPS_DMpb_matrix[rownames(sge_LPS_DMpb_matrix) == rownames(diffBetaGenes)[g],]
-        
-        ggplot() +
-          geom_histogram(aes(x = unlist(NCvars)), fill = "blue", alpha = 1/3) +
-          geom_histogram(aes(x = unlist(LPSvars)), fill = "red", alpha = 1/3)
-    
-        #only need metadata for these individuals
-        sigMetadata <- metadata[metadata$ID %in% names(NCvars),]
-        
-        if (variable == "agRec") {
-          sigMetadata <- sigMetadata[,c(1:4,8)]
-        } else {
-          sigMetadata <- sigMetadata[,c(1:4,9)]
-        }
-        
-        sigMetadata$LPSvar <- 0
-        sigMetadata$NCvar <- 0
-        
-        for (i in 1:dim(sigMetadata)[1]) {
-          varID <- which(names(NCvars) == sigMetadata$ID[i])
-          sigMetadata$LPSvar[i] <- as.numeric(LPSvars[varID])
-          sigMetadata$NCvar[i] <- as.numeric(NCvars[varID])
-        }
-        
-        ggplot() +
-          geom_point(aes(x = sigMetadata[,5], y = sigMetadata$NCvar), col = "blue") +
-          geom_point(aes(x = sigMetadata[,5], y = sigMetadata$LPSvar), col = "red") +
-          geom_smooth(aes(x = sigMetadata[,5], y = sigMetadata$NCvar), method = "lm", col = "blue") +
-          geom_smooth(aes(x = sigMetadata[,5], y = sigMetadata$LPSvar), method = "lm", col = "red") +
-          xlab(paste0(variable," (Centered)")) + ylab("DMpb (Red = LPS, Blue = NC)") +
-          ggtitle(paste0("NC-LPS interaction in ",geneName," metric:",variable))
-        
-        ggsave(paste0(workDir,"figures/responseEffects/interaction_xy_c",cluster,"_",variable,"_",geneName,".png"), 
-             width = 8, height = 6)
-      }
-    }
-
-  }
-}
-
-
-
-```
-## Run an Emreml model where "y" is just the difference in variance, not the raw variance
-```{r emmreml for diff in var}
-#number of permutations
-iters <- 100
-pvalCutoff <- 0.01
-
-#only run cluster 7 as a test
-for (cluster in c("00","14","02","05","06","07")) {
-  #cluster <- "14"
-  
-  sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
-  sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
-  
-  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
-  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
-  
-  ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
-  
-  trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
-
-  ### only want to use genes that were significant in the treatment condition ~0.20 FDR
-  # get the list of genes from that emreml result
-  sigGenes <- rownames(trtEmrml)[trtEmrml$p_value_trtLPS < pvalCutoff]
-
-  geneList <- sigGenes
-
-  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
-  
-  for (fObj in apropos("^sge_[NL][CP]")) {
-    tmpObj <- get(fObj)
-    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
-    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
-    
-    ## fix MO - 77_06 ID
-    if (sum(colnames(tmpObj) == "X77_06") > 0) {
-      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
-    }
-    #sort the columns by ID to match metadata
-    tmpObj <- tmpObj[,order(colnames(tmpObj))]
-    
-    #reassign the temp object to the sge_NC, etc
-    assign(x = fObj, value = tmpObj)
-  }
-  
-  
-  ## generate a dataframe of NC and LPS combined ##
-  sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
-  rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
-  sge_pbMean_matrix_nested$Row.names <- NULL
-  
-  #and raw means and variances to use in the variance model
-  sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
-  rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
-  sge_DMpb_matrix_nested$Row.names <- NULL
-  
-  indIDs <- colnames(sge_NC_DMpb_matrix)
-
-  
-  #calculate the DMdiff matrix | LPS - NC
-  sge_DMdiff_matrix <- sge_LPS_DMpb_matrix - sge_NC_DMpb_matrix
-  
-  
-  #pick metadata based on samples in the matrix
-  
-  ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
-  ## get some metadata ##
-  metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
-  # this file is also in SGE_DM/dataFiles
-  metadata[1,1] <- 'Mo'
-  metadata <- metadata[order(metadata$ID),]
-  
-  metadata <- metadata[metadata$ID %in% indIDs,]
-  
-  ## make sure metadata order matches data frames ##
-  all.equal(metadata$ID,colnames(sge_NC_DMpb_matrix))
-
-  ## run a nested model with trt, and age and elo nested within trt ##
-  ## elo and age have to be mean centered for nested model ##
-  metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
-  #metadata$elo_centered <- metadata$elo - mean(metadata$elo)
-  metadata$age_centered <- scale(metadata$age, center = T, scale = F)
-  #metadata$age_centered <- metadata$age - mean(metadata$age)
-  
-  behaveData <- read.table(paste0(workDir,"data/SGEII_METADATA_MASTER.txt"), header = T)
-  
-  #phase 1 only
-  behaveData <- subset(behaveData, phase == 1)
-  
-  #animals we need data for
-  # behave data is 2 character upper, genomic data is 4 char upper/lower
-  needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
-  
-  #limit behavioral data to correct 45 individs
-  behaveData <- subset(behaveData, ID %in% needIDs)
-  
-  #sort by ID
-  behaveData <- behaveData[order(behaveData$ID),]
-  
-  #get the important variables, centered
-  metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
-  metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
-  metadata$groom_cent <- behaveData$gc.overall.groom
-  
-  
-  
-  #need to run the loop locally
-  
-  ## regress out group effects from DMpb ##
-    design <- model.matrix(~metadata$group)
-    fit <-lmFit(sge_DMdiff_matrix,design)
-    intercepts=data.frame(eBayes(fit))[,1]
-    resid_DMdiff=apply(residuals.MArrayLM(object=fit, sge_DMdiff_matrix),2,function(x){x+intercepts})
-    
-    ######Now the other behavioral metrics
-    ###### | AgRec | Groom
-  
-    
-    #Agonism Received
-    design = model.matrix(~aggRec_cent + age_centered, data=metadata)
-    
-    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
-    res_full=resid_DMdiff[,1:(3*ncol(design))]
-    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
-    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
-    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
-    
-    #Declare object random_effects to store in it the individual-wise u random effects
-    random_effects=resid_DMdiff[,1:length(indIDs)]
-    colnames(random_effects)=metadata[1:length(indIDs),'ID']
-    
-    #Define matrix Z describing the sample-to-individual mapping
-    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-    # correcting capitalization so it matches
-    rownames(K)[34] <- 'JE11'
-    colnames(K)[34] <- 'JE11'
-    K=K[unique(metadata$ID),unique(metadata$ID)]
-    
-    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-    rownames(Z)=metadata$ID
-    colnames(Z)=colnames(K)
-    for(i in 1:ncol(Z)){
-      set=which(metadata$ID == colnames(Z)[i])
-      Z[set,i]=1
-    }
-    
-    for(i in 1:nrow(resid_DMdiff))
-    {
-      emma=emmreml(y=resid_DMdiff[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-      random_effects[i,]=t(emma$uhat)
-      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-    }
-    
-    assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMdiff_c",cluster))
-    #plotModelHists(get(paste0("res_full_aggRec_DMdiff_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMdiff_model_AgRec_c",cluster))
-    
-    ggplot() +
-     geom_histogram(aes(x = res_full[,8]), bins = 100) + xlab("pvalues") +
-          ggtitle(paste0("LPS - NC model ",cluster,", agRec"), subtitle = paste0("genes below ",pvalCutoff,", n = ",dim(res_full)[1]))
-    ggsave(paste0(workDir,"figures/responseEffects/pval_hist_",cluster,"_agRec.png"), 
-             width = 6, height = 4)
-    
-    #Overall Grooming
-    
-    design = model.matrix(~groom_cent + age_centered, data=metadata)
-    
-    #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
-    res_full=resid_DMdiff[,1:(3*ncol(design))]
-    colnames(res_full)[1:ncol(design)]=paste0("beta_",colnames(design))
-    colnames(res_full)[(ncol(design)+1):(2*ncol(design))]=paste0("sdev_",colnames(design))
-    colnames(res_full)[((2*ncol(design))+1):(3*ncol(design))]=paste0("p_value_",colnames(design))
-    
-    #Declare object random_effects to store in it the individual-wise u random effects
-    random_effects=resid_DMdiff[,1:length(indIDs)]
-    colnames(random_effects)=metadata[1:length(indIDs),'ID']
-    
-    #Define matrix Z describing the sample-to-individual mapping
-    K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
-    # correcting capitalization so it matches
-    rownames(K)[34] <- 'JE11'
-    colnames(K)[34] <- 'JE11'
-    K=K[unique(metadata$ID),unique(metadata$ID)]
-    
-    Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
-    rownames(Z)=metadata$ID
-    colnames(Z)=colnames(K)
-    for(i in 1:ncol(Z)){
-      set=which(metadata$ID == colnames(Z)[i])
-      Z[set,i]=1
-    }
-    
-    for(i in 1:nrow(resid_DMdiff))
-    {
-      emma=emmreml(y=resid_DMdiff[i,],X=design,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
-      random_effects[i,]=t(emma$uhat)
-      res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
-    }
-    
-    assign(value = data.frame(res_full), x = paste0("res_full_groom_DMdiff_c",cluster))
-    #plotModelHists(get(paste0("res_full_groom_DMdiff_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMdiff_model_groom_c",cluster))
-    
-    ggplot() +
-     geom_histogram(aes(x = res_full[,8]), bins = 100) + xlab("pvalues") +
-          ggtitle(paste0("LPS - NC model ",cluster,", groom"), subtitle = paste0("genes below ",pvalCutoff,", n = ",dim(res_full)[1]))
-    ggsave(paste0(workDir,"figures/responseEffects/pval_hist_",cluster,"_groom.png"), 
-             width = 6, height = 4)
-
-  
-}
-
-ggplot() +
-  geom_histogram(aes(x = res_full_aggRec_DMdiff_c14$p_value_aggRec_cent), bins = 100)
-
-ggplot() +
-  geom_histogram(aes(x = res_full_groom_DMdiff_c14$p_value_groom_cent), bins = 100)
-
-ggplot() +
-  geom_histogram(aes(x = res_full_aggRec_DMdiff_c14$p_value_age_centered), bins = 100)
-
-ggplot() +
-  geom_histogram(aes(x = res_full_groom_DMdiff_c14$p_value_age_centered), bins = 100)
-
-```
 
 
 ## Using Joaqiun's code to compare nested Betas as interaction Betas
@@ -3397,9 +3010,410 @@ for (cluster in c("00","14","02","05","06","07")) {
 
 ```
 
+
+
 ```{r interaction GSEA}
+### Permutation-based GSEA tests
+### Originally developed by Jordan Anderson and Noah Snyder-Mackler. Modified by Tauras Vilgalys. 
+### Last updated 2020 September 16
+
+###outside R, build a csv file with geneName,hallmarkPathway
+
+# Parameter options on lines 11 and 12
+# Data and files to load on lines 16 and 30
+## parameters to consider: 
+
+pvals <- FALSE ## are data in pvalues or betas? If betas, set pvals to FALSE
+weight <- 1 ## Weight to place on betas. Typically either a 1 or a 0, where 0 weights all effects equally.
+        ## weight=0 acts like a KS test, and is typically used with pvalues.
+
+for (cluster in clusterCellID$cluster) {
+  #cluster <- "00"
+  
+  for (bMetric in c("agRec","groom")) {
+    #bMetric <- "agRec"
+
+      #treatment <- "LPS"
+    
+      dir.create(paste0(workDir,"figures/gsea/c",cluster))
+    
+      lmVar <- "behav" #can be trt or behav
+      
+      DMPBemmreml <- get(paste0("res_full_",bMetric,"_DMpb_c",cluster))
+
+      #if we're dealing with treatment use col 2, behavior col 3
+      sampleBetas <- as.data.frame(rownames(DMPBemmreml))
+      
+      sampleBetas$Betas <- DMPBemmreml[,22]
+      
+      
+      colnames(sampleBetas) <- c("Gene","Betas")
+      
+      ## get gene.list
+      gene.list <- sampleBetas$Gene
+      
+      ## get nperm permutations of the vector of Betas
+      nperm <- 1000
+      for (i in 1:nperm) {
+        tmpB <- sample(sampleBetas$Beta)
+        cbind(sampleBetas,tmpB) -> sampleBetas; rm(tmpB)
+      }; rm(i)#; head(sampleBetas)
+      
+      ## Get the list of gene sets to test. here the file starts with gene names and the associated GO terms. 
+      
+      ## i downloaded these hallmark gene sets from https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+      
+      gene.set <- read.table(paste0(workDir,"hallmark_genes/hallmarkPathways.csv"), sep = ",")
+      
+      colnames(gene.set) <- c("Associated.Gene.Name","GO.Term.Accession")
+      
+      gene.set$gene_GO <- paste0(gene.set$Associated.Gene.Name,"_",gene.set$GO.Term.Accession)
+      
+      # Trim for expressed genes where B was estimated - only want gene set with emreml results
+      gene.set2 <- subset(gene.set, gene.set$Associated.Gene.Name %in% sampleBetas$Gene)
+      
+      
+      # Remove duplicated gene/GO pairings
+      gene.set2 <- gene.set2[!duplicated(gene.set2$gene_GO),]
+      
+      ## Get list of gene ontologies to test, and the number of genes in each
+      GO_res <- as.data.frame(matrix(ncol=2, nrow=length(unique(gene.set2$GO.Term.Accession)), unique(gene.set2$GO.Term.Accession)))
+      GO_res$V2 <- 0
+      GO_res <- GO_res[!(GO_res$V1 == ""),]; colnames(GO_res) <- c("GO", "n_genes")
+      for (i in 1:nrow(GO_res)) {
+        GO_res$n_genes[i] <- sum(gene.set2$GO.Term.Accession == GO_res$GO[i])
+        }
+      rm(i)
+      GO_res$n_genes <- as.numeric(GO_res$n_genes)
+      
+      ## Only consider gene sets with at least 5 measured genes
+      GO_res <- subset(GO_res, n_genes >= 5)
+      
+      ## Create a matrix of just the effect sizes, moving the gene names to the row.names
+      effect_size_matrix<-sampleBetas[,-1]
+      row.names(effect_size_matrix) <- sampleBetas[,1]
+      
+      
+      ## GSEA function
+      ### p-values are calculated based on a cdf. Another option would be to use a z-statistic, however that would assume normality? 
+      GSEA=function(effect_size_matrix,gene_set_list,gene_GO_associations, weight=1,num.cores=NA,pvals=F){
+        ## effect_size_matrix == gene x permutations matrix where rownames are the genes and the first column is the observed effect sizes (i.e., columns 2:ncol are the permuted betas)
+        if (is.na(num.cores)) num.cores=detectCores()
+        clus = makeCluster(getOption("cl.cores", num.cores))
+        clusterExport(clus,varlist=ls(),envir=environment())
+        a=parApply(clus,effect_size_matrix,2,function(tmp_data){
+          names(tmp_data)=rownames(effect_size_matrix)
+          tmp_data=sort(tmp_data,decreasing = T)
+          correl.vector<-tmp_data
+          tmp_all_genes<-names(tmp_data)
+          #So that we ultimately weight on our betas when weight==1
+          weighted.score.type=weight
+          Reduce(rbind,lapply(gene_set_list,function(GOcat){
+            tmp_set <- gene_GO_associations$Associated.Gene.Name[gene_GO_associations$GO.Term.Accession == GOcat]
+            #First we're indexing what genes are or aren't in our gene set (1 vs 0)
+            tag.indicator <- sign(match(tmp_all_genes, tmp_set, nomatch=0)) 
+            no.tag.indicator <- 1 - tag.indicator 
+            N <- length(tmp_all_genes) 
+            Nh <- length(tmp_set) 
+            Nm <-  N - Nh 
+            #This is just if we want to do a KS test(maybe if we want to compare later to some of your results using GAGE); weight==0
+            if (weight == 0) {
+              correl.vector <- rep(1, N)
+            }
+            alpha <- weighted.score.type
+            if (pvals==T) {correl.vector=-log10(correl.vector)}
+            correl.vector <- abs(correl.vector**alpha)
+            #Normalizing our Incremental increase by the sum of the abs our "correlations" (sum.correl.tag) and 
+            #normalizing our incremental decrease by the number of genes not in our set (Nm, which remember came from N-Nh above).
+            sum.correl.tag  <- sum(correl.vector[which(tag.indicator == 1)])
+            #attempting to remove the normalization
+            norm.tag    <- 1.0 / sum.correl.tag
+            norm.no.tag <- 1.0 / Nm
+            #Then we just walk down the gene list adding or substracting as such
+            ## don't use normalization in the math
+            RES <- cumsum(tag.indicator * correl.vector * norm.tag - no.tag.indicator * norm.no.tag)
+            #RES <- cumsum(tag.indicator * correl.vector - no.tag.indicator)
+            #Then obviously this is for maximum positively vs negatively enriched 
+            max.ES <- max(RES)
+            min.ES <- min(RES)
+            if (max.ES > - min.ES) {
+              #      ES <- max.ES
+              ES <- signif(max.ES, digits = 5)
+              arg.ES <- which.max(RES)
+            } else {
+              #      ES <- min.ES
+              ES <- signif(min.ES, digits=5)
+              arg.ES <- which.min(RES)
+            }
+            #if (length(gene_set)==1) {plot(cumsum(tag.indicator * correl.vector * norm.tag - no.tag.indicator * norm.no.tag),type = "l",xlab="Gene Index",ylab="Running Enrichment Score",xaxt="n"); axis(1,at=tag.indicator*1:length(tag.indicator),labels=T,tick=T)}
+            return(c(max.ES,min.ES))}))
+        })
+        ## Returns two columns, one for upreg and one for downreg
+        a=data.frame(a)
+        a_upreg=a[1:length(gene_set_list),]
+        a_downreg=a[(length(gene_set_list)+1):nrow(a),]
+        rownames(a_upreg)=names(gene_set_list)
+        rownames(a_downreg)=names(gene_set_list)
+        #rownames(a)=names(gene.set)
+        ## This doesn't seem right. Why would the pvals be lower if the max doesn't exceed the null?
+        pvals_upreg=apply(a_upreg,1,function(x){
+          #signif((sum(x[1] >= x[2:length(x)])+1)/(length(x)), digits=5)
+          ee <- ecdf(x[2:length(x)]); 1 - ee(x[1])
+          })
+        names(pvals_upreg)=names(gene_set_list)
+        pvals_downreg=apply(a_downreg,1,function(x){
+          #signif((sum(x[1] <= x[2:length(x)])+1)/(length(x)), digits=5)
+          ee <- ecdf(x[2:length(x)]); ee(x[1])
+          })
+        names(pvals_downreg)=names(gene_set_list)
+        pvals=cbind(pvals_upreg,pvals_downreg); 
+        #colnames(pvals)=c("pval_upreg","pval_downreg")
+        colnames(pvals)=c("pval_upVariance","pval_downVariance")
+        output=list(a_upreg,a_downreg,pvals)
+      }
+      
+      ## Run GSEA function for each GO term (defined earlier in GO_res$GO)
+      output <- GSEA(effect_size_matrix = effect_size_matrix,
+                   gene_set_list = unique(GO_res$GO),
+                   gene_GO_associations = gene.set2,
+                   weight = 1, pvals=F)
+      
+      names(output)=c("NES_matrix_upVariance","NES_matrix_downVariance","p_values")
+      
+      
+      
+      
+      # Normalize + ES' by the mean of + ES values, and - ES' by the mean of - ES null values for that gene set. 
+      ##This should effectively control for differences in gene set size
+      pos.ES.norm<-matrix(0,nrow=nrow(GO_res),ncol=nperm+1)
+      neg.ES.norm<-matrix(0,nrow=nrow(GO_res),ncol=nperm+1)
+      for (i in 1:length(GO_res$GO)) {
+               pos.ES <- unlist(output$NES_matrix_upVariance[i,])
+               names(pos.ES)<-NULL
+               neg.ES <- unlist(output$NES_matrix_downVariance[i,])
+                names(neg.ES)<-NULL
+               #for a given gene set, N, calculate the mean of the positive max ES for estimated+ permuted ES.
+               #calculate the mean of the max negative ES for estimate+ permuted ES also
+               pos.m <- mean(pos.ES)
+               neg.m <- mean(abs(neg.ES))
+               #Then for each permutation in that geneset, scale ES by this mean value, depending on if it was max + or max - ES
+               for (j in 1:(nperm+1)){
+               pos.ES.norm[i,j]<-pos.ES[j]/pos.m
+               neg.ES.norm[i,j]<-neg.ES[j]/neg.m
+               }
+      }
+      # FDR? 
+      ## Calculate p-values for one of the null distributions as well
+      perm_upreg <- apply(output$NES_matrix_upVariance[,-1],1,function(x) {ee <- ecdf(x[2:length(x)]); 1 - ee(x[1])})
+      perm_downreg <- apply(output$NES_matrix_downVariance[,-1],1,function(x) {ee <- ecdf(x[2:length(x)]); 1 - ee(x[1])})
+      ## Use perm.fdr function (written by Joaquin Sanz, available from Snyder-Mackler et al. 2016: https://github.com/nsmackler/status_genome_2016/blob/master/perm_FDR.R)
+      
+      
+      fdr_up <- perm.fdr(output$p_values, perm_upreg, "pval_upVariance", "fdr_vsPerm1")
+      fdr_down <- perm.fdr(output$p_values, perm_upreg, "pval_downVariance", "fdr_vsPerm1")
+      
+      upregNES <- output$NES_matrix_upVariance[,1]
+      dnregNES <- output$NES_matrix_downVariance[,1]
+      
+      
+      cbind(as.character(GO_res$GO),output$p_values)
+      
+      #plot significant effects
+      betasOnly <- as.data.frame(effect_size_matrix$Betas)
+      colnames(betasOnly) <- c("betas")
+      #rank where "1st rank" is most highly correlated
+      betasOnly$rank <- rank(-betasOnly$betas)
+      
+      for (r in 1:2) {
+        if(sum(output$p_values[,r] < .05) > 0) {
+          for (g in which(output$p_values[,r] < .05)) {
+            pathwayName <- as.character(GO_res$GO)[g]
+            pathwayGenes <- subset(gene.set2, GO.Term.Accession == pathwayName)$Associated.Gene.Name
+            betasOnly$pathway <- FALSE
+            betasOnly$pathway <- rownames(effect_size_matrix) %in% pathwayGenes
+            
+            betasPathway <- subset(betasOnly, pathway)
+            ggplot() +
+              geom_linerange(aes(x = betasOnly$rank, ymax = betasOnly$betas, ymin = 0), 
+                             alpha = 66/dim(effect_size_matrix)[1]) +
+              geom_linerange(aes(x = betasPathway$rank, ymax = betasPathway$betas, ymin = 0)) +
+              xlab("Rank") + ggtitle(pathwayName, 
+                                     subtitle = paste0(subset(GO_res, GO == pathwayName)$n_genes," genes, ",
+                                                       "p = ",round(as.numeric(output$p_values[g,r]), digits = 3),"    ",colnames(output$p_values)[r]))
+            ggsave(paste0(workDir,"figures/gsea/c",cluster,"/gsea_stickPlot_c",cluster,"_",bMetric,"_interaction_",pathwayName,".png"), width = 6, height = 4)
+          }
+        }
+      }
+      
+      #gseaC00trtNC <- output
+      #assign(x = paste0("gseaC",cluster,"by",lmVar), value = output)
+      
+      printOut <- as.data.frame(cbind(as.character(GO_res$GO),as.character(GO_res$n_genes),output$p_values,output$NES_matrix_upVariance[,1],output$NES_matrix_downVariance[,1]))
+      
+      colnames(printOut) <- c("pathway","nGenes","pval_upVar","pval_downVar","NES_upVar","NES_downVar")
+      
+      for ( c in 2:6) {
+        printOut[,c] <- as.numeric(printOut[,c])
+      }
+      
+      
+      assign(x = paste0("gseaC",cluster,"by",bMetric,"Int"), value = printOut)
+        
+      #sort by direction of the effect we care about
+      #trt = NC so we want "downregulated" genes
+      #LPS:behav sort by "upregulared" e.g. correlated with MORE of the behavior
+      
+      printOut <- printOut[order(as.numeric(printOut[,3])),]
+      
+      write.table(printOut,file=paste0(workDir,"figures/gsea/c",cluster,"/gsea_printOut_c",cluster,"_",treatment,"_int.txt"),
+                  row.names=T,col.names=T,quote=F,sep='\t')
+    }
+  }
+```
 
 
+```{r plot GSEA}
+for (behavior in c("aggRec","groom")) {
+    
+    #behavior <- "groom"
+    treatment <- "Int"
+    
+    c00tmp <- cbind(get(paste0("gseaC00by",behavior,treatment)),"CD8")
+    c14tmp <- cbind(get(paste0("gseaC14by",behavior,treatment)),"CD4")
+    c02tmp <- cbind(get(paste0("gseaC02by",behavior,treatment)),"NK")
+    c05tmp <- cbind(get(paste0("gseaC05by",behavior,treatment)),"B")
+    c06tmp <- cbind(get(paste0("gseaC06by",behavior,treatment)),"CD14lo")
+    c07tmp <- cbind(get(paste0("gseaC07by",behavior,treatment)),"CD14hi")
+    
+    
+    colnames(c00tmp)[7] <- colnames(c14tmp)[7] <- colnames(c02tmp)[7] <- colnames(c05tmp)[7] <- colnames(c06tmp)[7] <- colnames(c07tmp)[7] <-"cell_type"
+    
+    trtGSEA <- rbind(c00tmp,
+                      c14tmp,
+                      c02tmp,
+                      c05tmp,
+                      c06tmp,
+                      c07tmp)
+    
+    trtGSEA$cell_type <- factor(trtGSEA$cell_type, levels = c("CD8","CD4","NK","B","CD14lo","CD14hi"))
+    
+    trtGSEA$pathway <- str_replace(trtGSEA$pathway, pattern = "HALLMARK_", replacement = "")
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_upVar, size = -log10(pval_upVar + .001)))
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_downVar, size = -log10(pval_downVar + .001)))
+    
+    #make a column of "most severe" direction, up + down varianced, for each pathway
+    
+    trtGSEA$pval_sigVar <- 0
+    trtGSEA$NES_sigVar <- 0
+    trtGSEA$DIR_sigVar <- ""
+    
+    for (i in 1:dim(trtGSEA)[1]) {
+      if ( trtGSEA$pval_upVar[i] < trtGSEA$pval_downVar[i] ) {
+        #upVariance is more
+        trtGSEA$DIR_sigVar[i] <- "up"
+        trtGSEA$pval_sigVar[i] <- trtGSEA$pval_upVar[i]
+        trtGSEA$NES_sigVar[i] <- trtGSEA$NES_upVar[i]
+      } else {
+        #downVariance is more
+        trtGSEA$DIR_sigVar[i] <- "down"
+        trtGSEA$pval_sigVar[i] <- trtGSEA$pval_downVar[i]
+        trtGSEA$NES_sigVar[i] <- trtGSEA$NES_downVar[i]
+    
+      }
+    }
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001)))
+    
+    
+    #sort pathways by combined sig p-value
+    allPathways <- sort(unique(trtGSEA$pathway))
+    pathwaySig <- vector()
+    
+    for (p in allPathways) {
+      pvalSum <- sum(subset(trtGSEA, pathway == p)$pval_sigVar)
+      
+      #penalty for missing celltypes
+      pvalSum <- pvalSum + abs(length(subset(trtGSEA, pathway == p)$pval_sigVar) - 6)
+      
+      pathwaySig <- c(pathwaySig,pvalSum)
+    }
+    names(pathwaySig) <- allPathways
+    
+    
+    trtGSEA$pathway <- factor(trtGSEA$pathway, levels = trtOrder)
+    
+    ### replace the "0" p-values with 0.0005, which is halfway between the lowest value that 1,000 simulations can produce and 0
+    trtGSEA$pval_sigVar <- ifelse(trtGSEA$pval_sigVar == 0, 0.0005, trtGSEA$pval_sigVar)
 
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_upVar, size = -log10(pval_upVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85))
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_downVar, size = -log10(pval_downVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85))
+    
+    ggplot(data = trtGSEA, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85))
+    
+    #plot top 25 only | use top 25 from TREATMENT
+    #t25paths <- names(sort(pathwaySig)[1:25])
+    
+    trtGSEAt25 <- subset(trtGSEA, pathway %in% t25paths)
+    
+    ggplot(data = trtGSEAt25, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar + .001))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
+      labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
+      ggtitle(paste0(treatment,":",behavior," GSEA Results")) +
+      theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
+      theme(axis.text.y = element_text(size = 6))
+    
+    ggsave(paste0(workDir,"figures/gsea/heatmap_",behavior,"_",treatment,"_top25_pathways.png"), 
+           width = 8, height = 5)
+    
+    ## sig only
+    trtGSEAsigOnly <- subset(trtGSEA, pval_sigVar < .05)
+    
+    
+    ## sig in 2 pathways
+    ggplot(data = trtGSEAsigOnly, aes(x = cell_type, y = pathway)) +
+      geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar))) +
+      scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
+      labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
+      ggtitle("Treatment GSEA Results",
+              subtitle = "Significant pathways only") + 
+      theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
+      theme(axis.text.y = element_text(size = 6))
+    
+  ggsave(paste0(workDir,paste0("figures/gsea/heatmap_",behavior,"_",treatment,"_sig_pathways.png")), 
+           width = 8, height = 5)
+
+  #sig in 2 types
+  sigInTwo <- names(table(trtGSEAsigOnly$pathway))[table(trtGSEAsigOnly$pathway) > 1]
+
+  trtGSEAsigInTwo <- subset(trtGSEAsigOnly, pathway %in% sigInTwo)
+  #trtGSEAsigInTwo <- subset(trtGSEAsigInTwo, pval_sigVar < .05)
+
+  ggplot(data = trtGSEAsigInTwo, aes(x = cell_type, y = pathway)) +
+    geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar))) +
+    scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
+    labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
+    ggtitle("Treatment GSEA Results",
+            subtitle = "Significant in at least Two Cell Types") + 
+    theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
+    theme(axis.text.y = element_text(size = 6))
+    
+  ggsave(paste0(workDir,paste0("figures/gsea/heatmap_",behavior,"_",treatment,"_sigInTwoCellTypes_pathways.png")), 
+           width = 8, height = 5)
+
+}
 ```
 
