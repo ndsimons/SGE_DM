@@ -1,7 +1,6 @@
 
 ## Load packages ##
 .libPaths( c("/data/tunglab/crc/software/rLibs_3.6.1", .libPaths() ) )
-workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
 
 #bring in two arguments, cluster "number" and number of iterations
 args <- commandArgs(trailingOnly = TRUE)
@@ -29,9 +28,8 @@ iters <- as.numeric(args[2])
 
 print(nCluster)
 
-figDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/figures/"
-workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/"
-
+workDir <- "/data/tunglab/crc/macaqueRNA/sgeDM/q25dir/"
+figDir <- paste0(workDir,"figures/")
 
 perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
   
@@ -122,8 +120,13 @@ for (cluster in c("00","14","02","05","06","07")[nCluster]) {
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
   
+  ##### WORKAROUND HERE TO NAME THE GENE ROWS
+  rownames(sge_LPS_pbMean_matrix) <- rownames(sge_LPS_DMpb_matrix)
+  
   sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
   sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  rownames(sge_NC_pbMean_matrix) <- rownames(sge_NC_DMpb_matrix)
   
   ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
   numberNAs <- vector()

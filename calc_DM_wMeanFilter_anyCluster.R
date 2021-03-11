@@ -94,11 +94,21 @@ for (clusterNum in c(0:7,14)) {
     pseudobulk <- as.data.frame(pseudobulk)
     object_pseudobulkMeans <- pseudobulk
     
-    minGEthresh <- quantile(rowMeans(object_pseudobulkMeans), minGEpercentile/100)
-    geneList <- rownames(object_pseudobulkMeans)[rowMeans(object_pseudobulkMeans) > minGEthresh]
+    nGenes <- dim(object_pseudobulkMeans)[1]
     
-    assign(value = geneList, x = paste("geneList_",treatment, sep=""))
+    geneList <- vector()
     
+    for (r in 1:nGenes) {
+      if (sum(object_pseudobulkMeans[r,] == 0) == 0 ) {
+        geneList <- c(geneList,rownames(object_pseudobulkMeans)[r])
+      }
+    }
+    
+    minGEthresh <- quantile(rowMeans(object_pseudobulkMeans[rownames(object_pseudobulkMeans) %in% geneList,]), minGEpercentile/100)
+    geneListGE <- rownames(object_pseudobulkMeans)[rowMeans(object_pseudobulkMeans) > minGEthresh]
+    
+    assign(value = geneListGE, x = paste("geneList_",treatment, sep=""))
+
   }
   
   final_ind_list <- ind_list_NC[ind_list_NC %in% ind_list_LPS]

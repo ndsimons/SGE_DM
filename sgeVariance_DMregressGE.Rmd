@@ -1,10 +1,9 @@
 ---
-title: "sgeVariance_DMpb"
+title: "sgeVariance_DMregressGE"
 author: "c ryan"
-date: "1/29/2021"
+date: "3/10/2021"
 output: html_document
 ---
-
 
 ```{r packages, include=FALSE}
 library(ggplot2)
@@ -25,8 +24,12 @@ library(mashr)
 library(ggcorrplot)
 library(ggrepel)
 
-figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
-workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/regressGE/"
+figDir <- paste0(workDir,"figures/")
+
+dir.create(figDir)
+dir.create(paste0(workDir,"permutations/"))
+dir.create(paste0(workDir,"results/"))
 ```
 
 load helpful functions
@@ -141,7 +144,7 @@ iters <- 3
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")) {
-  #cluster <- "14"
+  #cluster <- "05"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
@@ -300,6 +303,16 @@ for (cluster in c("00","14","02","05","06","07")) {
     intercepts=data.frame(eBayes(fit))[,1]
     resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
     
+    #version 1 - regress individual's mean out of DMpb
+    metadata$means <- colMeans(sge_pbMean_matrix_nested)
+    ## regress out group effects AND MEAN from DMpb ##
+    design <- model.matrix(~metadata$group + metadata$means)
+    fit <-lmFit(sge_DMpb_matrix_nested,design)
+    intercepts=data.frame(eBayes(fit))[,1]
+    resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
+    
+    #version 2 - regress mean from **EVERY** DMpb value???
+
     ## regress out group effects from pbMean ##
     design <- model.matrix(~metadata$group)
     fit <-lmFit(sge_pbMean_matrix_nested,design)
@@ -307,33 +320,34 @@ for (cluster in c("00","14","02","05","06","07")) {
     resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
     
     #DMpb v pbMean instead of raw mean
-    p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpb_matrix[,1])) +
+    p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],resid_DMpb[,1])) +
       geom_point(alpha=0.5) +
       #ylim(0,250) +
       #xlim(0,50) +
       stat_smooth(method='lm', color='black', fullrange = T) +
       xlab('mean ge - individual 1') +
-      ylab('variance in gene expression - individual 1') +
+      ylab('resid_DMpb - individual 1') +
       theme_minimal()
-    p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DMpb_matrix[,2])) +
+    p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],resid_DMpb[,2])) +
       geom_point(alpha=0.5) +
       #ylim(0,250) +
       #xlim(0,50) +
       stat_smooth(method='lm', color='black', fullrange = T) +
       xlab('mean ge - individual 2') +
-      ylab('variance in gene expression - individual 2') +
+      ylab('resid_DMpb - individual 2') +
       theme_minimal()
-    p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DMpb_matrix[,3])) +
+    p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],resid_DMpb[,3])) +
       geom_point(alpha=0.5) +
       #ylim(0,250) +
       #xlim(0,50) +
       stat_smooth(method='lm', color='black', fullrange = T) +
       xlab('mean ge - individual 3') +
-      ylab('variance in gene expression - individual 3') +
+      ylab('resid_DMpb - individual 3') +
       theme_minimal()
     
     plot_grid(p1,p2,p3, ncol = 3)
-    ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
+    dir.create(paste0(figDir,"c",cluster))
+    ggsave(paste0(figDir,"c",cluster,"/","resid_DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
     
     
     ###### Fit an elo model for each gene using emmreml
@@ -380,7 +394,7 @@ for (cluster in c("00","14","02","05","06","07")) {
     plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
     
     ######Now the other behavioral metrics
-    ######agAsymm | AgRec | Groom
+    ###### AgRec | Groom
   
     
     #Agonism Received

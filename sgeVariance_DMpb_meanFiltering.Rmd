@@ -24,11 +24,8 @@ library(parallel)
 library(mashr)
 library(ggcorrplot)
 
-#others from GSEA?
-#library(cobs); library(parallel); library(doParallel)
-
-figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
-workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
+#figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
+#workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
 ```
 
 load helpful functions
@@ -114,42 +111,30 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
 
 ```
 
-
-
-```{r basic cell numbers for abstract}
-scRNAmetaData <- read.table("~/Dropbox (Personal)/scRNA/SGE_DM/data/pseudobulk_info.txt", sep = ",", header = TRUE)
-
-totCells <- sum(scRNAmetaData$cell.count)
-
-mnCellsperSamp <- mean(scRNAmetaData$cell.count)
-sdCellsperSamp <- sd(scRNAmetaData$cell.count)
-
-mnCellsperClust <- mean(colSums(scRNAmetaData[,5:15]))
-sdCellsperClust <- sd(colSums(scRNAmetaData[,5:15]))
-
-
-paste0("In total, we measured gene expression in ",totCells,
-             " cells (",round(mnCellsperSamp, digits = 0)," +/- ",round(sdCellsperSamp, digits = 1)," per sample, ",
-             round(mnCellsperClust, digits = 0)," +/- ",round(sdCellsperClust, digits = 1)," per cell clusters).")
-
-```
-
-
-
+## drop bottom 25% of genes by GE pseudobulk
 
 ```{r loop through clusters to model DMpb}
+figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/q50dir/figures/"
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/q50dir/"
+
 #number of permutations
-iters <- 100
+iters <- 0
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")) {
-  #cluster <- "14"
+  #cluster <- "06"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
   
+  ##### WORKAROUND HERE TO NAME THE GENE ROWS
+  rownames(sge_LPS_pbMean_matrix) <- rownames(sge_LPS_DMpb_matrix)
+  
   sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
   sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  ##### WORKAROUND HERE TO NAME THE GENE ROWS
+  rownames(sge_NC_pbMean_matrix) <- rownames(sge_NC_DMpb_matrix)
   
   ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
   numberNAs <- vector()
@@ -308,6 +293,8 @@ for (cluster in c("00","14","02","05","06","07")) {
     intercepts=data.frame(eBayes(fit))[,1]
     resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
     
+    
+    dir.create(paste0(workDir,"figures/c",cluster))
     #DMpb v pbMean instead of raw mean
     p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpb_matrix[,1])) +
       geom_point(alpha=0.5) +
@@ -335,6 +322,7 @@ for (cluster in c("00","14","02","05","06","07")) {
       theme_minimal()
     
     plot_grid(p1,p2,p3, ncol = 3)
+    
     ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
     
     
@@ -462,6 +450,9 @@ for (cluster in c("00","14","02","05","06","07")) {
     assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
     plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
   
+    
+    if ( iters > 0 ) {
+    
     ## Permutations for emprirical null ##
     ################################################################################################################################
     ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
@@ -639,15 +630,22 @@ for (cluster in c("00","14","02","05","06","07")) {
                                                         cluster,".txt"), quote = F, row.names = F)
       write.table(shuffled_elos_pvals_LPS, file = paste0(workDir,"permutations/shuffled_",model,"_NC_pval_c",
                                                          cluster,".txt"), quote = F, row.names = F)
-      
-      write.table(emmremlResults, file=paste0(workDir,paste0("results/results_c",
-                                                             cluster,"_",model,"_emmreml")),
-                  row.names=T,col.names=T,quote=F,sep='\t')
+    }
+    }
+    
+       if ( model == "elo") {
+        emmremlResultsNoPerm <- get(paste0("res_full_DMpb_c",cluster))
+       } else if ( model == "agRec" ) {
+        emmremlResultsNoPerm <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+       } else {
+        emmremlResultsNoPerm <- get(paste0("res_full_groom_DMpb_c",cluster))
+       }
+    
+      write.table(emmremlResultsNoPerm, file=paste0(workDir,paste0("results/results_c",cluster,"_",model,"_emmreml_noPerm")),row.names=T,col.names=T,quote=F,sep='\t')
       
       print(date())
       print(paste0("finished ",model," model permutations"))
   
-    }
     
   }
   
@@ -658,43 +656,6 @@ for (cluster in c("00","14","02","05","06","07")) {
 
 
 ```{r}
-plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model", 
-                           behaveMetric = "behavior", cluster = "99") {
-  modelName <- "DMpb_model_c02"
-  behaveMetric <- "elo"
-  cluster <- "02"
-  emmremlDF <- res_full_aggRec_DMpb_c02
-  folderName <- figDir
-  
-  nVars <- (dim(emmremlDF)[2] - 3)/ 3
-  
-  colNums <- (2 * nVars + 1) : (3 * nVars)
-  
-  for (c in colNums) {
-    ggplot() +
-      geom_histogram(aes(x = emmremlDF[,c]), bins = 100) +
-      xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName))
-    ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",
-                  str_replace(colnames(emmremlDF)[c],":","_"),".png"), width = 6, height = 4)
-    
-    if ( c %in% c(14,15,16) ) {
-      if ( c == 14 ) {
-        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_trt_pval_c",cluster)))
-      } else if ( c == 15 ) {
-        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_NC_pval_c",cluster)))
-      } else {
-        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_LPS_pval_c",cluster)))
-      }
-      
-      ggplot() +
-        geom_histogram(aes(x = emmremlDF[,c], y = ..count..), alpha = 2/3, bins = 100) +
-        geom_histogram(aes(x = unlist(permutations), y = ..count.. / iters), alpha = 1/3, fill = "red", bins = 100) +
-        xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName), subtitle = paste0(iters," permutations"))
-      ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",
-                    str_replace(colnames(emmremlDF)[c],":","_"),"_wPerms.png"), width = 6, height = 4)
-    }
-  }
-}
 
 for (b in c("elo","agRec","groom")) {
   for (c in c("00","14","02","05","06","07")) {
@@ -756,292 +717,6 @@ clusterCellID$groomBetas <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fd
                               "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_mono.CD14low_modelnum_1_covariate_gc.overall.groom_nperms_100.RDS")
 
 ```
-
-
-```{r how many genes are significant}
-
-#in clusters 00 -> 07
-#how many pass fdr of .01, .05, .10
-#treatment
-#LPS:elo
-
-FDRs <- c(.01,.05,.1,.2)
-
-trtFDR <- as.data.frame(clusterCellID$cluster)
-elotrtFDR <- as.data.frame(clusterCellID$cluster)
-agRectrtFDR <- as.data.frame(clusterCellID$cluster)
-groomtrtFDR <- as.data.frame(clusterCellID$cluster)
-eloncFDR <- as.data.frame(clusterCellID$cluster)
-agRecncFDR <- as.data.frame(clusterCellID$cluster)
-groomncFDR <- as.data.frame(clusterCellID$cluster)
-
-colnames(trtFDR) <- colnames(elotrtFDR) <- colnames(agRectrtFDR) <- colnames(groomtrtFDR) <- "cluster"
-colnames(eloncFDR) <- colnames(agRecncFDR) <- colnames(groomncFDR) <- "cluster"
-
-trtFDR$nGenes <- trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
-elotrtFDR$nGenes <- elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
-agRectrtFDR$nGenes <- agRectrtFDR$fdr20 <- agRectrtFDR$fdr10 <- agRectrtFDR$fdr05 <- agRectrtFDR$fdr01 <- 0
-groomtrtFDR$nGenes <- groomtrtFDR$fdr20 <- groomtrtFDR$fdr10 <- groomtrtFDR$fdr05 <- groomtrtFDR$fdr01 <- 0
-eloncFDR$nGenes <- eloncFDR$fdr20 <- eloncFDR$fdr10 <- eloncFDR$fdr05 <- eloncFDR$fdr01 <- 0
-agRecncFDR$nGenes <- agRecncFDR$fdr20 <- agRecncFDR$fdr10 <- agRecncFDR$fdr05 <- agRecncFDR$fdr01 <- 0
-groomncFDR$nGenes <- groomncFDR$fdr20 <- groomncFDR$fdr10 <- groomncFDR$fdr05 <- groomncFDR$fdr01 <- 0
-
-
-for (c in 1:dim(clusterCellID)[1]) {
-  cluster <- clusterCellID$cluster[c]
-  
-  cellID <- clusterCellID$cellID[c]
-  
-  for (f in FDRs) {
-    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
-    trtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloTrt < f)
-    elotrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestLPS < f)
-    eloncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestNC < f)
-    trtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-    elotrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-    eloncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-    
-    DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
-    agRectrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestLPS < f)
-    agRecncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestNC < f)
-    agRectrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-    agRecncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-    
-    DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
-    groomtrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestLPS < f)
-    groomncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestNC < f)
-    groomtrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-    groomncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
-
-  }
-  
-}
-
-write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, sep = ",")
-write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
-write.table(agRectrtFDR, file = paste0(workDir,"agRecTrtFDRcounts.txt"), quote = F, sep = ",")
-write.table(groomtrtFDR, file = paste0(workDir,"groomTrtFDRcounts.txt"), quote = F, sep = ",")
-write.table(elotrtFDR, file = paste0(workDir,"eloncFDRcounts.txt"), quote = F, sep = ",")
-write.table(agRectrtFDR, file = paste0(workDir,"agRecncFDRcounts.txt"), quote = F, sep = ",")
-write.table(groomtrtFDR, file = paste0(workDir,"groomncFDRcounts.txt"), quote = F, sep = ",")
-
-###Want to do some kable kabbler stuff here to make this easier
-
-```
-
-
-```{r genes with significant treatment betas}
-for (variable in c("aggRec","elo","groom")) {
-  #variable <- "elo"
-
-  for (cluster in c("00","14","02","05","06","07")) {
-    #cluster <- "00"
-    
-    if (variable == "elo") {
-      emrml <- get(paste0("res_full_DMpb_c",cluster))
-    } else {
-      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
-    }
-    
-    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
-    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
-    
-    emrml$NCsig <- emrml[,20] < 0.10
-    emrml$LPSsig <- emrml[,21] < 0.10
-    
-    assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
-    assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
-    
-    NCposRatio <- mean(emrml$NCstdBeta > 0)
-    LPSposRatio <- mean(emrml$LPSstdBeta > 0)
-
-    for (treatment in c("NC","LPS")) {
-      
-      if (treatment == "NC") {
-        colNum <- 22
-        betaPosRatio <- NCposRatio
-      } else {
-        colNum <- 23
-        betaPosRatio <- LPSposRatio
-      }
-      
-      posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
-      negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
-      
-      if (sum(posBetas,negBetas) > 0) {
-        #binomial test of 50-50 pos/neg betas
-        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
-        
-        #binomial test of pos/neg betas from exact distribution
-        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
-        
-        binomPval <- posBinomBkg$p.value
-      } else {
-        rm(posBinomBkg)
-        rm(posBinomNull)
-        binomPval <- NA
-      }
-      
-      ggplot() +
-        geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
-        ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
-                       dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
-        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
-        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
-        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
-                 size = 8, hjust = .25, vjust = .5) +
-        xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
-        xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
-      
-      ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
-    }
-
-
-    if (variable == "elo") {
-      for (fdrLvl in c(0.01,0.10)) {
-        
-        emrml$TRTstdBeta <- emrml[,2] / sqrt(emrml[,8])
-        
-        emrml$TRTsig <- emrml$fdr_eloTrt < fdrLvl
-      
-        assign(x = paste0("plotEmrml",cluster,variable,"TRT"), value = subset(emrml, TRTsig == TRUE))
-        
-        posBetas <- sum(get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta > 0)
-        negBetas <- sum(get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta < 0)
-        
-        TRTposRatio <- mean(emrml$LPSstdBeta > 0)
-        
-        
-        #binomial test of 50-50 pos/neg betas
-        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
-        
-        #binomial test of pos/neg betas from exact distribution
-        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = TRTposRatio)
-  
-  
-  
-        ggplot() +
-          geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta), bins = 50) +
-          ggtitle(paste0("Treatment - c",cluster," - ",
-                         dim(get(paste0("plotEmrml",cluster,variable,"TRT")))[1]," sig genes")) +
-          annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
-          annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
-          annotate(geom = "text", x = 7, y = 250, label = paste0("p=",signif(posBinomBkg$p.value, digits = 2)), 
-                   size = 8, hjust = .25, vjust = .5) +
-          xlab(paste0("Treatment - c",cluster," - std Betas (----> higher LPS variance)")) +
-          xlim(c(-12,12)) + ylim(c(0,300)) + theme(plot.title = element_text(size=24))
-      
-        ggsave(paste0(figDir,"/sigBetas_hist_TRT_fdr",as.character(fdrLvl),"_c",cluster,".png"))
-      }
-    }
-  }
-}
-```
-
-combine the significant genes for a single test
-
-```{r genes with significant treatment betas}
-
-count <- 1
-
-sigGenes <- as.data.frame(matrix(0, nrow = 30, ncol = 4))
-
-colnames(sigGenes) <- c("negGenes","posGenes","negSig","posSig")
-
-sigGenes$variable <- ""
-sigGenes$cluster <- ""
-
-
-for (variable in c("aggRec","elo","groom")) {
-  #variable <- "elo"
-
-  for (cluster in c("00","14","02","05","06","07")) {
-    #cluster <- "00"
-    
-    if (variable == "elo") {
-      emrml <- get(paste0("res_full_DMpb_c",cluster))
-    } else {
-      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
-    }
-    
-    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
-    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
-    
-    emrml$NCsig <- emrml[,20] < 0.10
-    emrml$LPSsig <- emrml[,21] < 0.10
-    
-    if (variable != "elo") {
-    
-    sigGenes[count,3] <- sum(emrml$NCstdBeta < 0)
-    sigGenes[count,4] <- sum(emrml$NCstdBeta > 0)
-    
-    sigGenes[count,1] <- sum(subset(emrml, NCsig == TRUE)$NCstdBeta < 0)
-    sigGenes[count,2] <- sum(subset(emrml, NCsig == TRUE)$NCstdBeta > 0)
-    
-    sigGenes[count,5] <- variable
-    sigGenes[count,6] <- cluster
-    
-    count <- count + 1
-    
-    sigGenes[count,3] <- sum(emrml$LPSstdBeta < 0)
-    sigGenes[count,4] <- sum(emrml$LPSstdBeta > 0)
-    
-    sigGenes[count,1] <- sum(subset(emrml, LPSsig == TRUE)$LPSstdBeta < 0)
-    sigGenes[count,2] <- sum(subset(emrml, LPSsig == TRUE)$LPSstdBeta > 0)
-    
-    sigGenes[count,5] <- variable
-    sigGenes[count,6] <- cluster
-
-
-    count <- count + 1
-    
-    }
-    
-
-    if (variable == "elo") {
-      
-      emrml$TRTstdBeta <- emrml[,2] / sqrt(emrml[,8])
-      emrml$TRTsig <- emrml$fdr_eloTrt < .1
-      
-      
-      sigGenes[count,3] <- sum(emrml$TRTstdBeta < 0)
-      sigGenes[count,4] <- sum(emrml$TRTstdBeta > 0)
-      
-      sigGenes[count,1] <- sum(subset(emrml, TRTsig == TRUE)$TRTstdBeta < 0)
-      sigGenes[count,2] <- sum(subset(emrml, TRTsig == TRUE)$TRTstdBeta > 0)
-
-      sigGenes[count,5] <- variable
-      sigGenes[count,6] <- cluster
-
-      count <- count + 1
-      
-    }
-  }
-}
-
-### Flip grooming so that pos genes = higher stress
-
-groomTmp <- sigGenes[19:30,1:4]
-
-sigGenes$posGenes[19:30] <- groomTmp$negGenes
-sigGenes$negGenes[19:30] <- groomTmp$posGenes
-sigGenes$negSig[19:30] <- groomTmp$posSig
-sigGenes$posSig[19:30] <- groomTmp$negSig
-
-sigGenesSum <- colSums(sigGenes[,1:4])
-
-sigGenesTrt <- colSums(sigGenes[13:18,1:4])
-sigGenesagRec <- colSums(sigGenes[1:12,1:4])
-sigGenesGroom <- colSums(sigGenes[19:30,1:4])
-
-print("treatment")
-trtP <- binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
-print("groom")
-agRecP <- binom.test(sigGenesagRec[2], sum(sigGenesagRec[1:2]), p = sigGenesagRec[4]/sum(sigGenesagRec[3:4]))
-print("agRec")
-groomP <- binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroom[4]/sum(sigGenesGroom[3:4]))
-```
-
 
 ```{r is there a correlation between mean and DM betas}
 
@@ -1547,6 +1222,297 @@ ggplot(data = dmMeanRawCors, aes(y = NCcor, x = clusterID)) +
 #for LPS / agg and groom use LPS
 
 ```
+
+
+
+
+
+```{r how many genes are significant}
+
+#in clusters 00 -> 07
+#how many pass fdr of .01, .05, .10
+#treatment
+#LPS:elo
+
+FDRs <- c(.01,.05,.1,.2)
+
+trtFDR <- as.data.frame(clusterCellID$cluster)
+elotrtFDR <- as.data.frame(clusterCellID$cluster)
+agRectrtFDR <- as.data.frame(clusterCellID$cluster)
+groomtrtFDR <- as.data.frame(clusterCellID$cluster)
+eloncFDR <- as.data.frame(clusterCellID$cluster)
+agRecncFDR <- as.data.frame(clusterCellID$cluster)
+groomncFDR <- as.data.frame(clusterCellID$cluster)
+
+colnames(trtFDR) <- colnames(elotrtFDR) <- colnames(agRectrtFDR) <- colnames(groomtrtFDR) <- "cluster"
+colnames(eloncFDR) <- colnames(agRecncFDR) <- colnames(groomncFDR) <- "cluster"
+
+trtFDR$nGenes <- trtFDR$fdr20 <- trtFDR$fdr10 <- trtFDR$fdr05 <- trtFDR$fdr01 <- 0
+elotrtFDR$nGenes <- elotrtFDR$fdr20 <- elotrtFDR$fdr10 <- elotrtFDR$fdr05 <- elotrtFDR$fdr01 <- 0
+agRectrtFDR$nGenes <- agRectrtFDR$fdr20 <- agRectrtFDR$fdr10 <- agRectrtFDR$fdr05 <- agRectrtFDR$fdr01 <- 0
+groomtrtFDR$nGenes <- groomtrtFDR$fdr20 <- groomtrtFDR$fdr10 <- groomtrtFDR$fdr05 <- groomtrtFDR$fdr01 <- 0
+eloncFDR$nGenes <- eloncFDR$fdr20 <- eloncFDR$fdr10 <- eloncFDR$fdr05 <- eloncFDR$fdr01 <- 0
+agRecncFDR$nGenes <- agRecncFDR$fdr20 <- agRecncFDR$fdr10 <- agRecncFDR$fdr05 <- agRecncFDR$fdr01 <- 0
+groomncFDR$nGenes <- groomncFDR$fdr20 <- groomncFDR$fdr10 <- groomncFDR$fdr05 <- groomncFDR$fdr01 <- 0
+
+
+for (c in 1:dim(clusterCellID)[1]) {
+  cluster <- clusterCellID$cluster[c]
+  
+  cellID <- clusterCellID$cellID[c]
+  
+  for (f in FDRs) {
+    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+    trtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloTrt < f)
+    elotrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestLPS < f)
+    eloncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestNC < f)
+    trtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    elotrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    eloncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+    agRectrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestLPS < f)
+    agRecncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestNC < f)
+    agRectrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    agRecncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    
+    DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+    groomtrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestLPS < f)
+    groomncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestNC < f)
+    groomtrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+    groomncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
+
+  }
+  
+}
+
+write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, sep = ",")
+write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(agRectrtFDR, file = paste0(workDir,"agRecTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(groomtrtFDR, file = paste0(workDir,"groomTrtFDRcounts.txt"), quote = F, sep = ",")
+write.table(elotrtFDR, file = paste0(workDir,"eloncFDRcounts.txt"), quote = F, sep = ",")
+write.table(agRectrtFDR, file = paste0(workDir,"agRecncFDRcounts.txt"), quote = F, sep = ",")
+write.table(groomtrtFDR, file = paste0(workDir,"groomncFDRcounts.txt"), quote = F, sep = ",")
+
+###Want to do some kable kabbler stuff here to make this easier
+
+```
+
+
+```{r genes with significant treatment betas}
+for (variable in c("aggRec","elo","groom")) {
+  #variable <- "elo"
+
+  for (cluster in c("00","14","02","05","06","07")) {
+    #cluster <- "00"
+    
+    if (variable == "elo") {
+      emrml <- get(paste0("res_full_DMpb_c",cluster))
+    } else {
+      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    }
+    
+    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
+    
+    emrml$NCsig <- emrml[,20] < 0.10
+    emrml$LPSsig <- emrml[,21] < 0.10
+    
+    assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
+    assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+    
+    NCposRatio <- mean(emrml$NCstdBeta > 0)
+    LPSposRatio <- mean(emrml$LPSstdBeta > 0)
+
+    for (treatment in c("NC","LPS")) {
+      
+      if (treatment == "NC") {
+        colNum <- 22
+        betaPosRatio <- NCposRatio
+      } else {
+        colNum <- 23
+        betaPosRatio <- LPSposRatio
+      }
+      
+      posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
+      negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
+      
+      if (sum(posBetas,negBetas) > 0) {
+        #binomial test of 50-50 pos/neg betas
+        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
+        
+        binomPval <- posBinomBkg$p.value
+      } else {
+        rm(posBinomBkg)
+        rm(posBinomNull)
+        binomPval <- NA
+      }
+      
+      ggplot() +
+        geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
+        ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
+                       dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
+        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
+                 size = 8, hjust = .25, vjust = .5) +
+        xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
+        xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
+      
+      ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
+    }
+
+
+    if (variable == "elo") {
+      for (fdrLvl in c(0.01,0.10)) {
+        
+        emrml$TRTstdBeta <- emrml[,2] / sqrt(emrml[,8])
+        
+        emrml$TRTsig <- emrml$fdr_eloTrt < fdrLvl
+      
+        assign(x = paste0("plotEmrml",cluster,variable,"TRT"), value = subset(emrml, TRTsig == TRUE))
+        
+        posBetas <- sum(get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta > 0)
+        negBetas <- sum(get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta < 0)
+        
+        TRTposRatio <- mean(emrml$LPSstdBeta > 0)
+        
+        
+        #binomial test of 50-50 pos/neg betas
+        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = TRTposRatio)
+  
+  
+  
+        ggplot() +
+          geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta), bins = 50) +
+          ggtitle(paste0("Treatment - c",cluster," - ",
+                         dim(get(paste0("plotEmrml",cluster,variable,"TRT")))[1]," sig genes")) +
+          annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+          annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+          annotate(geom = "text", x = 7, y = 250, label = paste0("p=",signif(posBinomBkg$p.value, digits = 2)), 
+                   size = 8, hjust = .25, vjust = .5) +
+          xlab(paste0("Treatment - c",cluster," - std Betas (----> higher LPS variance)")) +
+          xlim(c(-12,12)) + ylim(c(0,300)) + theme(plot.title = element_text(size=24))
+      
+        ggsave(paste0(figDir,"/sigBetas_hist_TRT_fdr",as.character(fdrLvl),"_c",cluster,".png"))
+      }
+    }
+  }
+}
+```
+
+combine the significant genes for a single test
+
+```{r genes with significant treatment betas}
+
+count <- 1
+
+sigGenes <- as.data.frame(matrix(0, nrow = 30, ncol = 4))
+
+colnames(sigGenes) <- c("negGenes","posGenes","negSig","posSig")
+
+sigGenes$variable <- ""
+sigGenes$cluster <- ""
+
+
+for (variable in c("aggRec","elo","groom")) {
+  #variable <- "elo"
+
+  for (cluster in c("00","14","02","05","06","07")) {
+    #cluster <- "00"
+    
+    if (variable == "elo") {
+      emrml <- get(paste0("res_full_DMpb_c",cluster))
+    } else {
+      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    }
+    
+    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
+    
+    emrml$NCsig <- emrml[,20] < 0.10
+    emrml$LPSsig <- emrml[,21] < 0.10
+    
+    if (variable != "elo") {
+    
+    sigGenes[count,3] <- sum(emrml$NCstdBeta < 0)
+    sigGenes[count,4] <- sum(emrml$NCstdBeta > 0)
+    
+    sigGenes[count,1] <- sum(subset(emrml, NCsig == TRUE)$NCstdBeta < 0)
+    sigGenes[count,2] <- sum(subset(emrml, NCsig == TRUE)$NCstdBeta > 0)
+    
+    sigGenes[count,5] <- variable
+    sigGenes[count,6] <- cluster
+    
+    count <- count + 1
+    
+    sigGenes[count,3] <- sum(emrml$LPSstdBeta < 0)
+    sigGenes[count,4] <- sum(emrml$LPSstdBeta > 0)
+    
+    sigGenes[count,1] <- sum(subset(emrml, LPSsig == TRUE)$LPSstdBeta < 0)
+    sigGenes[count,2] <- sum(subset(emrml, LPSsig == TRUE)$LPSstdBeta > 0)
+    
+    sigGenes[count,5] <- variable
+    sigGenes[count,6] <- cluster
+
+
+    count <- count + 1
+    
+    }
+    
+
+    if (variable == "elo") {
+      
+      emrml$TRTstdBeta <- emrml[,2] / sqrt(emrml[,8])
+      emrml$TRTsig <- emrml$fdr_eloTrt < .1
+      
+      
+      sigGenes[count,3] <- sum(emrml$TRTstdBeta < 0)
+      sigGenes[count,4] <- sum(emrml$TRTstdBeta > 0)
+      
+      sigGenes[count,1] <- sum(subset(emrml, TRTsig == TRUE)$TRTstdBeta < 0)
+      sigGenes[count,2] <- sum(subset(emrml, TRTsig == TRUE)$TRTstdBeta > 0)
+
+      sigGenes[count,5] <- variable
+      sigGenes[count,6] <- cluster
+
+      count <- count + 1
+      
+    }
+  }
+}
+
+### Flip grooming so that pos genes = higher stress
+
+groomTmp <- sigGenes[19:30,1:4]
+
+sigGenes$posGenes[19:30] <- groomTmp$negGenes
+sigGenes$negGenes[19:30] <- groomTmp$posGenes
+sigGenes$negSig[19:30] <- groomTmp$posSig
+sigGenes$posSig[19:30] <- groomTmp$negSig
+
+sigGenesSum <- colSums(sigGenes[,1:4])
+
+sigGenesTrt <- colSums(sigGenes[13:18,1:4])
+sigGenesagRec <- colSums(sigGenes[1:12,1:4])
+sigGenesGroom <- colSums(sigGenes[19:30,1:4])
+
+print("treatment")
+trtP <- binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
+print("groom")
+agRecP <- binom.test(sigGenesagRec[2], sum(sigGenesagRec[1:2]), p = sigGenesagRec[4]/sum(sigGenesagRec[3:4]))
+print("agRec")
+groomP <- binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroom[4]/sum(sigGenesGroom[3:4]))
+```
+
+
+
 
 What is the distribution of DM values?
 ```{r}
