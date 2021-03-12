@@ -1064,7 +1064,7 @@ for (cluster in c("00","02","14","05","06","07")) {
     #variable <- "elo"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
-                                         (3 + which(betaLocation == variable))])
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas"))))])
     
     paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
     paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
@@ -1248,7 +1248,7 @@ for (cluster in c("00","02","14","05","06","07")) {
     #variable <- "elo"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
-                                         (3 + which(betaLocation == variable))])
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
     
     paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
     paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])

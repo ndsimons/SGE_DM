@@ -23,6 +23,7 @@ library(biomaRt)
 library(parallel)
 library(mashr)
 library(ggcorrplot)
+library(metafolio)
 
 #figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/figures/"
 #workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
@@ -114,11 +115,11 @@ plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "
 ## drop bottom 25% of genes by GE pseudobulk
 
 ```{r loop through clusters to model DMpb}
-figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/q50dir/figures/"
-workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/q50dir/"
+figDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/q25dir/figures/"
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/q25dir/"
 
 #number of permutations
-iters <- 0
+iters <- 10
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")) {
@@ -244,6 +245,36 @@ for (cluster in c("00","14","02","05","06","07")) {
   #flip factors in metadata
   metadata$trt <- factor(metadata$trt, levels = c("NC","LPS"))
   
+    dir.create(paste0(workDir,"figures/c",cluster))
+  #DMpb v pbMean instead of raw mean
+  p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpb_matrix[,1])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,250) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    xlab('mean ge - individual 1') +
+    ylab('variance in gene expression - individual 1') +
+    theme_minimal()
+  p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DMpb_matrix[,2])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,250) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    xlab('mean ge - individual 2') +
+    ylab('variance in gene expression - individual 2') +
+    theme_minimal()
+  p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DMpb_matrix[,3])) +
+    geom_point(alpha=0.5) +
+    #ylim(0,250) +
+    #xlim(0,50) +
+    stat_smooth(method='lm', color='black', fullrange = T) +
+    xlab('mean ge - individual 3') +
+    ylab('variance in gene expression - individual 3') +
+    theme_minimal()
+  
+  plot_grid(p1,p2,p3, ncol = 3)
+  
+  ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
   
   #have run this up on the cluster, check for those files and skip if they've been made
   #list.files(path = paste0(workDir,"cluster/permutations/"))
@@ -292,38 +323,6 @@ for (cluster in c("00","14","02","05","06","07")) {
     fit <-lmFit(sge_pbMean_matrix_nested,design)
     intercepts=data.frame(eBayes(fit))[,1]
     resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
-    
-    
-    dir.create(paste0(workDir,"figures/c",cluster))
-    #DMpb v pbMean instead of raw mean
-    p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpb_matrix[,1])) +
-      geom_point(alpha=0.5) +
-      #ylim(0,250) +
-      #xlim(0,50) +
-      stat_smooth(method='lm', color='black', fullrange = T) +
-      xlab('mean ge - individual 1') +
-      ylab('variance in gene expression - individual 1') +
-      theme_minimal()
-    p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DMpb_matrix[,2])) +
-      geom_point(alpha=0.5) +
-      #ylim(0,250) +
-      #xlim(0,50) +
-      stat_smooth(method='lm', color='black', fullrange = T) +
-      xlab('mean ge - individual 2') +
-      ylab('variance in gene expression - individual 2') +
-      theme_minimal()
-    p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DMpb_matrix[,3])) +
-      geom_point(alpha=0.5) +
-      #ylim(0,250) +
-      #xlim(0,50) +
-      stat_smooth(method='lm', color='black', fullrange = T) +
-      xlab('mean ge - individual 3') +
-      ylab('variance in gene expression - individual 3') +
-      theme_minimal()
-    
-    plot_grid(p1,p2,p3, ncol = 3)
-    
-    ggsave(paste0(figDir,"c",cluster,"/","DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
     
     
     ###### Fit an elo model for each gene using emmreml
@@ -654,8 +653,44 @@ for (cluster in c("00","14","02","05","06","07")) {
 ```
 
 
-
 ```{r}
+plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model", 
+                           behaveMetric = "behavior", cluster = "99") {
+  #modelName <- "DMpb_model_c02"
+  #behaveMetric <- "elo"
+  #cluster <- "02"
+  #emmremlDF <- res_full_aggRec_DMpb_c02
+  #folderName <- figDir
+  
+  nVars <- (dim(emmremlDF)[2] - 3)/ 3
+  
+  colNums <- (2 * nVars + 1) : (3 * nVars)
+  
+  for (c in colNums) {
+    ggplot() +
+      geom_histogram(aes(x = emmremlDF[,c]), bins = 100) +
+      xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName))
+    ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",
+                  str_replace(colnames(emmremlDF)[c],":","_"),".png"), width = 6, height = 4)
+    
+    if ( c %in% c(14,15,16) ) {
+      if ( c == 14 ) {
+        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_trt_pval_c",cluster)))
+      } else if ( c == 15 ) {
+        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_NC_pval_c",cluster)))
+      } else {
+        assign(x = "permutations", value = get(paste0("shuffled_",behaveMetric,"_LPS_pval_c",cluster)))
+      }
+      
+      ggplot() +
+        geom_histogram(aes(x = emmremlDF[,c], y = ..count..), alpha = 2/3, bins = 100) +
+        geom_histogram(aes(x = unlist(permutations), y = ..count.. / iters), alpha = 1/3, fill = "red", bins = 100) +
+        xlab(colnames(emmremlDF)[c]) + ggtitle(paste0("emmreml run ",modelName), subtitle = paste0(iters," permutations"))
+      ggsave(paste0(folderName,"emmreml_hist_",modelName,"_",
+                    str_replace(colnames(emmremlDF)[c],":","_"),"_wPerms.png"), width = 6, height = 4)
+    }
+  }
+}
 
 for (b in c("elo","agRec","groom")) {
   for (c in c("00","14","02","05","06","07")) {
@@ -678,7 +713,6 @@ for (b in c("elo","agRec","groom")) {
 
 
 ```
-
 
 ```{r cell type metadata}
 clusterCellID <- as.data.frame(c("00","14","02","05","06","07"))
@@ -720,14 +754,17 @@ clusterCellID$groomBetas <- c("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fd
 
 ```{r is there a correlation between mean and DM betas}
 
+
+gg3col <- gg_color_hue(3)
+
 for (cluster in c("00","02","14","05","06","07")) {
   #cluster <- "00"
   
   for (variable in c("aggRec","groom","elo")) {
-    #variable <- "elo"
+    #variable <- "aggRec"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
-                                         (3 + which(betaLocation == variable))])
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
     
     paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
     paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
@@ -911,7 +948,7 @@ for (cluster in c("00","02","14","05","06","07")) {
     #variable <- "elo"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
-                                         (3 + which(betaLocation == variable))])
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
     
     paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
     paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
@@ -1026,13 +1063,17 @@ COMBcor <- vector()
 
 for (cluster in c("00","14","02","05","06","07")) {
   
-  #cluster <- "07"
+  #cluster <- "02"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
   
+  rownames(sge_LPS_pbMean_matrix) <- rownames(sge_LPS_DMpb_matrix)
+  
   sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
   sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  rownames(sge_NC_pbMean_matrix) <- rownames(sge_NC_DMpb_matrix)
   
   ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
   numberNAs <- vector()
