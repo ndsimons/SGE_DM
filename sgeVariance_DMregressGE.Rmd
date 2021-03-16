@@ -23,6 +23,7 @@ library(parallel)
 library(mashr)
 library(ggcorrplot)
 library(ggrepel)
+library(metafolio)
 
 workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/regressGE/"
 figDir <- paste0(workDir,"figures/")
@@ -96,7 +97,7 @@ perm.fdr=function(input_df,perm_df,Pvals_col_name,name){
 }
 
 
-plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model") {
+plotModelHistsNoFDR <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model") {
   #modelName <- "DMpb_model_AgAsym_c02"
   #emmremlDF <- res_full_aggAsym_DMpb_c02
   #folderName <- figDir
@@ -140,11 +141,11 @@ paste0("In total, we measured gene expression in ",totCells,
 
 ```{r loop through clusters to model DMpb}
 #number of permutations
-iters <- 3
+iters <- 10
 
 #only run cluster 7 as a test
-for (cluster in c("00","14","02","05","06","07")) {
-  #cluster <- "05"
+for (cluster in c("00","14","02","05","06","07")[5]) {
+  #cluster <- "14"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
@@ -196,6 +197,27 @@ for (cluster in c("00","14","02","05","06","07")) {
     assign(x = fObj, value = tmpObj)
   }
   
+  ### Regress mean out of EVERY GENE
+  sge_LPS_DMpbResid_matrix <- sge_LPS_DMpb_matrix
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpb_matrix
+  
+  #meaasure the means, so i can correct for the differences in the mean in the residuals
+  LPS_DMmeans <- rowMeans(sge_LPS_DMpbResid_matrix)
+  NC_DMmeans <- rowMeans(sge_NC_DMpbResid_matrix)
+  
+  for (g in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+    tmpData <- as.data.frame(cbind(t(sge_NC_pbMean_matrix[g,]),t(sge_NC_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_NC_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+    
+    tmpData <- as.data.frame(cbind(t(sge_LPS_pbMean_matrix[g,]),t(sge_LPS_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_LPS_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+  }
+  
+  #add the average DM for NC and LPS back in
+  sge_LPS_DMpbResid_matrix <- sge_LPS_DMpbResid_matrix + LPS_DMmeans
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpbResid_matrix + NC_DMmeans
   
   ## generate a dataframe of NC and LPS combined ##
   sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
@@ -207,17 +229,19 @@ for (cluster in c("00","14","02","05","06","07")) {
   rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
   sge_DMpb_matrix_nested$Row.names <- NULL
   
+  #and raw means and variances and residuals
+  sge_DMpbResid_matrix_nested <- merge(sge_NC_DMpbResid_matrix,sge_LPS_DMpbResid_matrix, by=0)
+  rownames(sge_DMpbResid_matrix_nested) <- sge_DMpbResid_matrix_nested$Row.names
+  sge_DMpbResid_matrix_nested$Row.names <- NULL
+
   indIDs <- colnames(sge_NC_DMpb_matrix)
 
   #pick metadata based on samples in the matrix
-  
-  ## Here I'm doing some modeling to ask what are the effects of treatment and rank on DM ##
   ## get some metadata ##
   metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
   # this file is also in SGE_DM/dataFiles
   metadata[1,1] <- 'Mo'
   metadata <- metadata[order(metadata$ID),]
-  
   metadata <- metadata[metadata$ID %in% indIDs,]
   
   ## make sure metadata order matches data frames ##
@@ -227,7 +251,7 @@ for (cluster in c("00","14","02","05","06","07")) {
   metadata <- rbind(metadata,metadata)
   metadata$trt <- rep(c('NC','LPS'), times=c(length(indIDs),length(indIDs)))
   
-  ## run a nested model with trt, and age and elo nested within trt ##
+  ## run a nested model with trt, and age and <behavior metric> nested within trt ##
   ## elo and age have to be mean centered for nested model ##
   metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
   #metadata$elo_centered <- metadata$elo - mean(metadata$elo)
@@ -259,7 +283,6 @@ for (cluster in c("00","14","02","05","06","07")) {
   
   #flip factors in metadata
   metadata$trt <- factor(metadata$trt, levels = c("NC","LPS"))
-  
   
   #have run this up on the cluster, check for those files and skip if they've been made
   #list.files(path = paste0(workDir,"cluster/permutations/"))
@@ -297,21 +320,11 @@ for (cluster in c("00","14","02","05","06","07")) {
   } else {
     #need to run the loop locally
   
-    ## regress out group effects from DMpb ##
+    ## regress out group effects from DMpb_residuals ##
     design <- model.matrix(~metadata$group)
-    fit <-lmFit(sge_DMpb_matrix_nested,design)
+    fit <-lmFit(sge_DMpbResid_matrix_nested,design)
     intercepts=data.frame(eBayes(fit))[,1]
-    resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
-    
-    #version 1 - regress individual's mean out of DMpb
-    metadata$means <- colMeans(sge_pbMean_matrix_nested)
-    ## regress out group effects AND MEAN from DMpb ##
-    design <- model.matrix(~metadata$group + metadata$means)
-    fit <-lmFit(sge_DMpb_matrix_nested,design)
-    intercepts=data.frame(eBayes(fit))[,1]
-    resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpb_matrix_nested),2,function(x){x+intercepts})
-    
-    #version 2 - regress mean from **EVERY** DMpb value???
+    resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpbResid_matrix_nested),2,function(x){x+intercepts})
 
     ## regress out group effects from pbMean ##
     design <- model.matrix(~metadata$group)
@@ -320,26 +333,20 @@ for (cluster in c("00","14","02","05","06","07")) {
     resid_pbMean=apply(residuals.MArrayLM(object=fit, sge_pbMean_matrix_nested),2,function(x){x+intercepts})
     
     #DMpb v pbMean instead of raw mean
-    p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],resid_DMpb[,1])) +
+    p1 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,1],sge_NC_DMpbResid_matrix[,1])) +
       geom_point(alpha=0.5) +
-      #ylim(0,250) +
-      #xlim(0,50) +
       stat_smooth(method='lm', color='black', fullrange = T) +
       xlab('mean ge - individual 1') +
       ylab('resid_DMpb - individual 1') +
       theme_minimal()
-    p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],resid_DMpb[,2])) +
+    p2 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,2],sge_NC_DMpbResid_matrix[,2])) +
       geom_point(alpha=0.5) +
-      #ylim(0,250) +
-      #xlim(0,50) +
       stat_smooth(method='lm', color='black', fullrange = T) +
       xlab('mean ge - individual 2') +
       ylab('resid_DMpb - individual 2') +
       theme_minimal()
-    p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],resid_DMpb[,3])) +
+    p3 <- ggplot(sge_NC_pbMean_matrix, aes(sge_NC_pbMean_matrix[,3],sge_NC_DMpbResid_matrix[,3])) +
       geom_point(alpha=0.5) +
-      #ylim(0,250) +
-      #xlim(0,50) +
       stat_smooth(method='lm', color='black', fullrange = T) +
       xlab('mean ge - individual 3') +
       ylab('resid_DMpb - individual 3') +
@@ -353,7 +360,7 @@ for (cluster in c("00","14","02","05","06","07")) {
     ###### Fit an elo model for each gene using emmreml
     
     ### modeling DMpb
-    ###### Fit an elo model for each gene using emmreml to DM pseudobulk
+    ###### Fit an elo model for each gene using emmreml to DM pseudobulk residuals
     
     design = model.matrix(~trt+trt:elo_centered+trt:age_centered,data=metadata)
     
@@ -389,14 +396,15 @@ for (cluster in c("00","14","02","05","06","07")) {
       res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
     }
     
-    assign(value = data.frame(res_full), x = paste0("res_full_DMpb_c",cluster))
+    assign(value = data.frame(res_full), x = paste0("res_full_DMpbRegGE_c",cluster))
     
-    plotModelHists(get(paste0("res_full_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_c",cluster))
+    plotModelHistsNoFDR(get(paste0("res_full_DMpbRegGE_c",cluster)), 
+                        folderName = paste0(figDir,"c",cluster,"/"), 
+                        modelName = paste0("DMpbRegGE_model_c",cluster))
     
     ######Now the other behavioral metrics
     ###### AgRec | Groom
   
-    
     #Agonism Received
     design = model.matrix(~trt+trt:aggRec_cent + trt:age_centered, data=metadata)
     
@@ -432,11 +440,13 @@ for (cluster in c("00","14","02","05","06","07")) {
       res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
     }
     
-    assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpb_c",cluster))
-    plotModelHists(get(paste0("res_full_aggRec_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_AgRec_c",cluster))
+    assign(value = data.frame(res_full), x = paste0("res_full_aggRec_DMpbRegGE_c",cluster))
+    plotModelHistsNoFDR(get(paste0("res_full_aggRec_DMpbRegGE_c",cluster)), 
+                        folderName = paste0(figDir,"c",cluster,"/"), 
+                        modelName = paste0("DMpbRegGE_model_AgRec_c",cluster))
+    
     
     #Overall Grooming
-    
     design = model.matrix(~trt+trt:groom_cent + trt:age_centered, data=metadata)
     
     #Declare object res_full to store in it the model results: beta coefficients, standard deviations and p values
@@ -471,9 +481,13 @@ for (cluster in c("00","14","02","05","06","07")) {
       res_full[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
     }
     
-    assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpb_c",cluster))
-    plotModelHists(get(paste0("res_full_groom_DMpb_c",cluster)), folderName = paste0(figDir,"c",cluster,"/"), modelName = paste0("DMpb_model_groom_c",cluster))
-  
+    assign(value = data.frame(res_full), x = paste0("res_full_groom_DMpbRegGE_c",cluster))
+    plotModelHistsNoFDR(get(paste0("res_full_groom_DMpbRegGE_c",cluster)), 
+                        folderName = paste0(figDir,"c",cluster,"/"), 
+                        modelName = paste0("DMpbRegGE_model_groom_c",cluster))
+
+    
+    if ( iters > 0 ) {
     ## Permutations for emprirical null ##
     ################################################################################################################################
     ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
@@ -623,25 +637,25 @@ for (cluster in c("00","14","02","05","06","07")) {
       
       #after the permutations are finished, use the function "perm.fdr" to add permutation based qvalues to the output
       if ( model == "elo") {
-        emmremlResults <- get(paste0("res_full_DMpb_c",cluster))
+        emmremlResults <- get(paste0("res_full_DMpbRegGE_c",cluster))
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","eloTrt")
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.elo_centered","eloNestNC")
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.elo_centered","eloNestLPS")
-        assign(value = emmremlResults, x = paste0("res_full_DMpb_c",cluster))
+        assign(value = emmremlResults, x = paste0("res_full_DMpbRegGE_c",cluster))
   
       } else if ( model == "agRec" ) {
-        emmremlResults <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+        emmremlResults <- get(paste0("res_full_aggRec_DMpbRegGE_c",cluster))
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","agRecTrt")
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.aggRec_cent","agRecNestNC")
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.aggRec_cent","agRecNestLPS")
-        assign(value = emmremlResults, x = paste0("res_full_aggRec_DMpb_c",cluster))
+        assign(value = emmremlResults, x = paste0("res_full_aggRec_DMpbRegGE_c",cluster))
         
       } else {
-        emmremlResults <- get(paste0("res_full_groom_DMpb_c",cluster))
+        emmremlResults <- get(paste0("res_full_groom_DMpbRegGE_c",cluster))
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elo_trt_pvals,"p_value_trtLPS","groomTrt")
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_NC,"p_value_trtNC.groom_cent","groomNestNC")
         emmremlResults <- perm.fdr(emmremlResults,shuffled_elos_pvals_LPS,"p_value_trtLPS.groom_cent","groomNestLPS")
-        assign(value = emmremlResults, x = paste0("res_full_groom_DMpb_c",cluster))
+        assign(value = emmremlResults, x = paste0("res_full_groom_DMpbRegGE_c",cluster))
         
       }
   
@@ -660,6 +674,8 @@ for (cluster in c("00","14","02","05","06","07")) {
       print(paste0("finished ",model," model permutations"))
   
     }
+      
+    }
     
   }
   
@@ -671,12 +687,12 @@ for (cluster in c("00","14","02","05","06","07")) {
 
 ```{r}
 plotModelHists <- function(emmremlDF, folderName = "~/Downloads/", modelName = "model", 
-                           behaveMetric = "behavior", cluster = "99") {
-  modelName <- "DMpb_model_c02"
-  behaveMetric <- "elo"
-  cluster <- "02"
-  emmremlDF <- res_full_aggRec_DMpb_c02
-  folderName <- figDir
+                           behaveMetric = "behavior", cluster = "99", iters = 100) {
+  #modelName <- "DMpb_model_c02"
+  #behaveMetric <- "elo"
+  #cluster <- "02"
+  #emmremlDF <- res_full_aggRec_DMpb_c02
+  #folderName <- figDir
   
   nVars <- (dim(emmremlDF)[2] - 3)/ 3
   
@@ -712,18 +728,19 @@ for (b in c("elo","agRec","groom")) {
   for (c in c("00","14","02","05","06","07")) {
     
     if (b == "elo") {
-      emmremlOutput <- get(paste0("res_full_DMpb_c",c))
+      emmremlOutput <- get(paste0("res_full_DMpbRegGE_c",c))
     } else if (b == "agRec") {
-      emmremlOutput <- get(paste0("res_full_aggRec_DMpb_c",c))
+      emmremlOutput <- get(paste0("res_full_aggRec_DMpbRegGE_c",c))
     } else {
-      emmremlOutput <- get(paste0("res_full_groom_DMpb_c",c))
+      emmremlOutput <- get(paste0("res_full_groom_DMpbRegGE_c",c))
     }
     
     plotModelHists(emmremlDF = emmremlOutput, 
                    folderName = paste0(figDir,"c",c,"/"), 
                    modelName = paste0(b,"_model_c",c),
                    cluster = c,
-                   behaveMetric = b)
+                   behaveMetric = b,
+                   iters = 100)
   }
 }
 
@@ -805,7 +822,7 @@ for (c in 1:dim(clusterCellID)[1]) {
   cellID <- clusterCellID$cellID[c]
   
   for (f in FDRs) {
-    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+    DMPBemmreml <- get(paste0("res_full_DMpbRegGE_c",cluster))
     trtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloTrt < f)
     elotrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestLPS < f)
     eloncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_eloNestNC < f)
@@ -813,13 +830,13 @@ for (c in 1:dim(clusterCellID)[1]) {
     elotrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
     eloncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
     
-    DMPBemmreml <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+    DMPBemmreml <- get(paste0("res_full_aggRec_DMpbRegGE_c",cluster))
     agRectrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestLPS < f)
     agRecncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_agRecNestNC < f)
     agRectrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
     agRecncFDR$nGenes[c] <- dim(DMPBemmreml)[1]
     
-    DMPBemmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+    DMPBemmreml <- get(paste0("res_full_groom_DMpbRegGE_c",cluster))
     groomtrtFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestLPS < f)
     groomncFDR[c,(which(FDRs == f) + 1)] <- sum(DMPBemmreml$fdr_groomNestNC < f)
     groomtrtFDR$nGenes[c] <- dim(DMPBemmreml)[1]
@@ -850,9 +867,9 @@ for (variable in c("aggRec","elo","groom")) {
     #cluster <- "00"
     
     if (variable == "elo") {
-      emrml <- get(paste0("res_full_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
     } else {
-      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
     }
     
     emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
@@ -923,14 +940,14 @@ for (variable in c("aggRec","elo","groom")) {
         
         TRTposRatio <- mean(emrml$LPSstdBeta > 0)
         
-        
+        if (sum(posBetas,negBetas) > 0) {
         #binomial test of 50-50 pos/neg betas
         posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
         
         #binomial test of pos/neg betas from exact distribution
         posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = TRTposRatio)
   
-  
+
   
         ggplot() +
           geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,"TRT"))$TRTstdBeta), bins = 50) +
@@ -944,6 +961,7 @@ for (variable in c("aggRec","elo","groom")) {
           xlim(c(-12,12)) + ylim(c(0,300)) + theme(plot.title = element_text(size=24))
       
         ggsave(paste0(figDir,"/sigBetas_hist_TRT_fdr",as.character(fdrLvl),"_c",cluster,".png"))
+        }
       }
     }
   }
@@ -971,9 +989,9 @@ for (variable in c("aggRec","elo","groom")) {
     #cluster <- "00"
     
     if (variable == "elo") {
-      emrml <- get(paste0("res_full_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
     } else {
-      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
     }
     
     emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
@@ -1046,8 +1064,8 @@ sigGenesTrt <- colSums(sigGenes[13:18,1:4])
 sigGenesagRec <- colSums(sigGenes[1:12,1:4])
 sigGenesGroom <- colSums(sigGenes[19:30,1:4])
 
-print("treatment")
-trtP <- binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
+#print("treatment")
+#trtP <- binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
 print("groom")
 agRecP <- binom.test(sigGenesagRec[2], sum(sigGenesagRec[1:2]), p = sigGenesagRec[4]/sum(sigGenesagRec[3:4]))
 print("agRec")
@@ -1057,6 +1075,8 @@ groomP <- binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroo
 
 ```{r is there a correlation between mean and DM betas}
 
+gg3col <- gg_color_hue(3)
+
 for (cluster in c("00","02","14","05","06","07")) {
   #cluster <- "00"
   
@@ -1064,7 +1084,7 @@ for (cluster in c("00","02","14","05","06","07")) {
     #variable <- "elo"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
-                                         (which(colnames(clusterCellID) == paste0(variable,"Betas"))))])
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
     
     paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
     paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
@@ -1073,9 +1093,9 @@ for (cluster in c("00","02","14","05","06","07")) {
     paulResults$LPSsigMean <- paulResults[,29] < 0.10
   
     if (variable == "elo") {
-      emrml <- get(paste0("res_full_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
     } else {
-      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
     }
     
     meanDMgeneList <-  intersect(rownames(paulResults),rownames(emrml))
@@ -1257,9 +1277,9 @@ for (cluster in c("00","02","14","05","06","07")) {
     paulResults$LPSsigMean <- paulResults[,29] < 0.10
   
     if (variable == "elo") {
-      emrml <- get(paste0("res_full_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
     } else {
-      emrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+      emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
     }
     
     meanDMgeneList <-  intersect(rownames(paulResults),rownames(emrml))
@@ -1413,7 +1433,25 @@ for (cluster in c("00","14","02","05","06","07")) {
     #reassign the temp object to the sge_NC, etc
     assign(x = fObj, value = tmpObj)
   }
-  
+
+
+  #take residuals of DM~mean relationship  
+  sge_LPS_DMpbResid_matrix <- sge_LPS_DMpb_matrix
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpb_matrix
+
+    
+  for (g in 1:dim(sge_LPS_DMpb_matrix)) {
+    tmpData <- as.data.frame(cbind(t(sge_NC_pbMean_matrix[g,]),t(sge_NC_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_NC_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+    
+    tmpData <- as.data.frame(cbind(t(sge_LPS_pbMean_matrix[g,]),t(sge_LPS_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_LPS_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+
+  }
+
+
   
   ## generate a dataframe of NC and LPS combined ##
   sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
@@ -1424,7 +1462,13 @@ for (cluster in c("00","14","02","05","06","07")) {
   sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
   rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
   sge_DMpb_matrix_nested$Row.names <- NULL
-  
+
+  #and raw means and variances to use in the variance model
+  sge_DMpbResid_matrix_nested <- merge(sge_NC_DMpbResid_matrix,sge_LPS_DMpbResid_matrix, by=0)
+  rownames(sge_DMpbResid_matrix_nested) <- sge_DMpbResid_matrix_nested$Row.names
+  sge_DMpbResid_matrix_nested$Row.names <- NULL
+
+
   indIDs <- colnames(sge_NC_DMpb_matrix)
   
   totInds <- length(indIDs)
@@ -1433,10 +1477,10 @@ for (cluster in c("00","14","02","05","06","07")) {
   for (i in 1:length(indIDs)) {
     #i <- 18
     
-    rLPS <- cor(sge_LPS_DMpb_matrix[,i],sge_LPS_pbMean_matrix[,i])
-    rNC <- cor(sge_NC_DMpb_matrix[,i],sge_NC_pbMean_matrix[,i])
-    rCmb <- cor(c(sge_LPS_DMpb_matrix[,i],sge_NC_DMpb_matrix[,i]),
-                c(sge_LPS_pbMean_matrix[,i],sge_LPS_pbMean_matrix[,i]))
+    rLPS <- cor(sge_LPS_DMpbResid_matrix[,i],sge_LPS_pbMean_matrix[,i])
+    rNC <- cor(sge_NC_DMpbResid_matrix[,i],sge_NC_pbMean_matrix[,i])
+    rCmb <- cor(c(sge_LPS_DMpbResid_matrix[,i],sge_NC_DMpbResid_matrix[,i]),
+                c(sge_LPS_pbMean_matrix[,i],sge_NC_pbMean_matrix[,i]))
 
     # ggplot() +
     #   geom_point(aes(x = sge_NC_DMpb_matrix[,i], y = sge_NC_pbMean_matrix[,i]), alpha = 0.5) +
@@ -1918,7 +1962,7 @@ for (cluster in clusterCellID$cluster) {
     lmVar <- "trt" #can be trt or behav
     
     #starting with c00, treatment | res_full_aggRec_DMpb_c00
-    DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+    DMPBemmreml <- get(paste0("res_full_DMpbRegGE_c",cluster))
     
     #if we're dealing with treatment use col 2, behavior col 3
     sampleBetas <- as.data.frame(rownames(DMPBemmreml))
@@ -2214,11 +2258,11 @@ for (cluster in clusterCellID$cluster) {
     
       lmVar <- "behav" #can be trt or behav
       
-      #starting with c00, treatment | res_full_aggRec_DMpb_c00
+      #starting with c00, treatment | res_full_aggRec_DMpbRegGE_c00
       if (bMetric == "elo") {
-        DMPBemmreml <- get(paste0("res_full_DMpb_c",cluster))
+        DMPBemmreml <- get(paste0("res_full_DMpbRegGE_c",cluster))
       } else {
-        DMPBemmreml <- get(paste0("res_full_",bMetric,"_DMpb_c",cluster))
+        DMPBemmreml <- get(paste0("res_full_",bMetric,"_DMpbRegGE_c",cluster))
       }
       
       #if we're dealing with treatment use col 2, behavior col 3
@@ -2942,14 +2986,14 @@ for (cluster in c("00","14","02","05","06","07")) {
   
     variable <- "groom"
 
-    assign(x = paste0("res_full_DMpb_c",cluster),
+    assign(x = paste0("res_full_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
         
-    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+    assign(x = paste0("res_full_",variable,"_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_",variable,"_emmreml")))
     
-    trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
-    behaveEmrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    trtEmrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
+    behaveEmrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
     
     #subtract betas
     behaveEmrml$beta_trtInteraction.groom_cent <- behaveEmrml$beta_trtLPS.groom_cent - behaveEmrml$beta_trtNC.groom_cent
@@ -2967,7 +3011,7 @@ for (cluster in c("00","14","02","05","06","07")) {
     
     write.table(behaveEmrml, file = paste0(workDir,"cluster/results/results_c",
                                            cluster,"_",variable,"_emmreml_wInteraction"))
-    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+    assign(x = paste0("res_full_",variable,"_DMpbRegGE_c",cluster),
            value = behaveEmrml)
     
     ggplot() +
@@ -2980,14 +3024,14 @@ for (cluster in c("00","14","02","05","06","07")) {
     
     variable <- "agRec"
 
-    assign(x = paste0("res_full_DMpb_c",cluster),
+    assign(x = paste0("res_full_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
         
-    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+    assign(x = paste0("res_full_",variable,"_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_",variable,"_emmreml")))
     
-    trtEmrml <- get(paste0("res_full_DMpb_c",cluster))
-    behaveEmrml <- get(paste0("res_full_",variable,"_DMpb_c",cluster))
+    trtEmrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
+    behaveEmrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
     
     #subtract betas
     behaveEmrml$beta_trtInteraction.aggRec_cent <- behaveEmrml$beta_trtLPS.aggRec_cent - behaveEmrml$beta_trtNC.aggRec_cent
@@ -3005,7 +3049,7 @@ for (cluster in c("00","14","02","05","06","07")) {
     
     write.table(behaveEmrml, file = paste0(workDir,"cluster/results/results_c",
                                            cluster,"_",variable,"_emmreml_wInteraction"))
-    assign(x = paste0("res_full_",variable,"_DMpb_c",cluster),
+    assign(x = paste0("res_full_",variable,"_DMpbRegGE_c",cluster),
            value = behaveEmrml)
     
     ggplot() +
@@ -3049,7 +3093,7 @@ for (cluster in clusterCellID$cluster) {
     
       lmVar <- "behav" #can be trt or behav
       
-      DMPBemmreml <- get(paste0("res_full_",bMetric,"_DMpb_c",cluster))
+      DMPBemmreml <- get(paste0("res_full_",bMetric,"_DMpbRegGE_c",cluster))
 
       #if we're dealing with treatment use col 2, behavior col 3
       sampleBetas <- as.data.frame(rownames(DMPBemmreml))
@@ -3441,8 +3485,8 @@ for (cluster in clusterCellID$cluster) {
   
   dir.create(paste0(workDir,"figures/gsea/c",cluster))
     
-  agRecEmmreml <- get(paste0("res_full_agRec_DMpb_c",cluster))
-  groomEmmreml <- get(paste0("res_full_groom_DMpb_c",cluster))
+  agRecEmmreml <- get(paste0("res_full_agRec_DMpbRegGE_c",cluster))
+  groomEmmreml <- get(paste0("res_full_groom_DMpbRegGE_c",cluster))
 
   for (treatment in c("NC","LPS")) {
     #treatment <- "LPS"

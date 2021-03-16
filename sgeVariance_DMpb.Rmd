@@ -137,7 +137,7 @@ paste0("In total, we measured gene expression in ",totCells,
 
 ```{r loop through clusters to model DMpb}
 #number of permutations
-iters <- 3
+iters <- 10
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")) {
@@ -1050,7 +1050,7 @@ for (cluster in c("00","02","14","05","06","07")) {
     #variable <- "elo"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
-                                         (3 + which(betaLocation == variable))])
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
     
     paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
     paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
@@ -1422,7 +1422,7 @@ for (cluster in c("00","14","02","05","06","07")) {
     rLPS <- cor(sge_LPS_DMpb_matrix[,i],sge_LPS_pbMean_matrix[,i])
     rNC <- cor(sge_NC_DMpb_matrix[,i],sge_NC_pbMean_matrix[,i])
     rCmb <- cor(c(sge_LPS_DMpb_matrix[,i],sge_NC_DMpb_matrix[,i]),
-                c(sge_LPS_pbMean_matrix[,i],sge_LPS_pbMean_matrix[,i]))
+                c(sge_LPS_pbMean_matrix[,i],sge_NC_pbMean_matrix[,i]))
 
     # ggplot() +
     #   geom_point(aes(x = sge_NC_DMpb_matrix[,i], y = sge_NC_pbMean_matrix[,i]), alpha = 0.5) +

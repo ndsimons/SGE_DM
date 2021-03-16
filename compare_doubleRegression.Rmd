@@ -1,0 +1,182 @@
+---
+title: "sgeVariance_DM_v_doubleRegession"
+author: "c ryan"
+date: "3/15/2021"
+output: html_document
+---
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(limma)
+library(edgeR)
+library(EMMREML)
+library(cobs)
+library(cowplot)
+library(snakecase)
+library(stringr)
+library(qvalue)
+library(scales)
+library(reshape2)
+library(topGO)
+library(biomaRt)
+library(parallel)
+library(mashr)
+library(ggcorrplot)
+library(ggrepel)
+library(metafolio)
+
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/"
+figDir <- paste0(workDir,"figures/")
+
+regWorkDir <- paste0(workDir,"regressGE/")
+regFigDir <- paste0(regWorkDir,"figures/")
+
+```
+
+
+```{r}
+
+#bring in "DM betas"
+#have run this up on the cluster, check for those files and skip if they've been made
+#list.files(path = paste0(workDir,"cluster/permutations/"))
+
+for (cluster in c("00","14","02","05","06","07")) {
+
+  sgeOutput <- list.files(path = paste0(workDir,"cluster/results/"))
+  clustResults <- c(paste0("results_c",cluster,"_agRec_emmreml"),
+                    paste0("results_c",cluster,"_elo_emmreml"),
+                    paste0("results_c",cluster,"_groom_emmreml"))
+  
+  if ( sum(clustResults %in% sgeOutput) == 3 ) {
+    #data have been run on the cluster, just load the results
+    
+    #elo results
+    assign(x = paste0("res_full_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
+    
+    #agRec
+    assign(x = paste0("res_full_aggRec_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_agRec_emmreml")))
+    
+    #groom
+    assign(x = paste0("res_full_groom_DMpb_c",cluster),
+           value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_groom_emmreml")))
+    
+  }
+}
+
+
+for (cluster in c("00","14","02","05","06","07")) {
+  
+  #bring in double regressed betas
+  #have run this up on the cluster, check for those files and skip if they've been made
+  #list.files(path = paste0(workDir,"cluster/permutations/"))
+  sgeOutput <- list.files(path = paste0(regWorkDir,"results/"))
+  clustResults <- c(paste0("results_c",cluster,"_agRec_emmreml"),
+                    paste0("results_c",cluster,"_elo_emmreml"),
+                    paste0("results_c",cluster,"_groom_emmreml"))
+  
+  if ( sum(clustResults %in% sgeOutput) == 3 ) {
+    #data have been run on the cluster, just load the results
+    
+    #elo results
+    assign(x = paste0("res_full_DMpbRegGE_c",cluster),
+           value = read.table(paste0(regWorkDir,"results/results_c",cluster,"_elo_emmreml")))
+    
+    #agRec
+    assign(x = paste0("res_full_aggRec_DMpbRegGE_c",cluster),
+           value = read.table(paste0(regWorkDir,"results/results_c",cluster,"_agRec_emmreml")))
+    
+    #groom
+    assign(x = paste0("res_full_groom_DMpbRegGE_c",cluster),
+           value = read.table(paste0(regWorkDir,"results/results_c",cluster,"_groom_emmreml")))
+    
+  }
+}
+
+
+```
+
+
+```{r compare betas}
+
+for (cluster in c("00","14","02","05","06","07")) {
+  cluster <- "14"
+  
+  agRec_DM <- get(paste0("res_full_aggRec_DMpb_c",cluster))
+  agRec_DM <- agRec_DM[order(rownames(agRec_DM)),]
+  elo_DM <- get(paste0("res_full_DMpb_c",cluster))
+  elo_DM <- elo_DM[order(rownames(elo_DM)),]
+  groom_DM <- get(paste0("res_full_groom_DMpb_c",cluster))
+  groom_DM <- groom_DM[order(rownames(groom_DM)),]
+  
+  
+  agRec_DMregGE <- get(paste0("res_full_aggRec_DMpbRegGE_c",cluster))
+  agRec_DMregGE <- agRec_DMregGE[order(rownames(agRec_DMregGE)),]
+  
+  elo_DMregGE <- get(paste0("res_full_DMpbRegGE_c",cluster))
+  elo_DMregGE <- elo_DMregGE[order(rownames(elo_DMregGE)),]
+  
+  groom_DMregGE <- get(paste0("res_full_groom_DMpbRegGE_c",cluster))
+  groom_DMregGE <- groom_DMregGE[order(rownames(groom_DMregGE)),]
+  
+  
+  ggplot() +
+    geom_point(aes(x = agRec_DM$beta_trtLPS.aggRec_cent,
+                   y = agRec_DMregGE$beta_trtLPS.aggRec_cent)) +
+    xlab("DM normal - agRec:LPS betas") +
+    ylab("DM double regression - agRec:LPS betas") +
+    ggtitle(paste0("double Regression v Normal Betas"),
+    subtitle = paste0("Agonism Received, c",cluster))
+  ggsave(paste0("~/Dropbox (Personal)/scRNA/SGE_DM/doubleRegress/figures/",cluster,"_agRecBetasLPS.png"))
+
+  
+  ggplot() +
+    geom_point(aes(x = agRec_DM$beta_trtNC.aggRec_cent,
+                   y = agRec_DMregGE$beta_trtNC.aggRec_cent)) +
+    xlab("DM normal - agRec:NC betas") +
+    ylab("DM double regression - agRec:NC betas") +
+    ggtitle(paste0("double Regression v Normal Betas"),
+    subtitle = paste0("Agonism Received, c",cluster))
+  ggsave(paste0("~/Dropbox (Personal)/scRNA/SGE_DM/doubleRegress/figures/",cluster,"_agRecBetasNC.png"))
+  
+  ggplot() +
+    geom_point(aes(x = agRec_DM$beta_trtLPS,
+                   y = agRec_DMregGE$beta_trtLPS)) +
+    xlab("DM normal - Treatment betas (agRec)") +
+    ylab("DM double regression - Treatment betas (agRec)") +
+    ggtitle(paste0("double Regression v Normal Betas"),
+    subtitle = paste0("Treatment, c",cluster))
+  ggsave(paste0("~/Dropbox (Personal)/scRNA/SGE_DM/doubleRegress/figures/",cluster,"_agRecBetas_Trt.png"))
+  
+  ggplot() +
+    geom_point(aes(x = groom_DM$beta_trtLPS.groom_cent,
+                   y = groom_DMregGE$beta_trtLPS.groom_cent)) +
+    xlab("DM normal - groom:LPS betas") +
+    ylab("DM double regression - groom:LPS betas") +
+    ggtitle(paste0("double Regression v Normal Betas"),
+    subtitle = paste0("Grooming, c",cluster))
+  ggsave(paste0("~/Dropbox (Personal)/scRNA/SGE_DM/doubleRegress/figures/",cluster,"_groomBetasLPS.png"))
+  
+  ggplot() +
+    geom_point(aes(x = groom_DM$beta_trtNC.groom_cent,
+                   y = groom_DMregGE$beta_trtNC.groom_cent)) +
+    xlab("DM normal - groom:NC betas") +
+    ylab("DM double regression - groom:NC betas") +
+    ggtitle(paste0("double Regression v Normal Betas"),
+    subtitle = paste0("Grooming, c",cluster))
+  ggsave(paste0("~/Dropbox (Personal)/scRNA/SGE_DM/doubleRegress/figures/",cluster,"_groomBetasNC.png"))
+
+
+    ggplot() +
+    geom_point(aes(x = groom_DM$beta_trtLPS,
+                   y = groom_DMregGE$beta_trtLPS)) +
+    xlab("DM normal - Treatment betas (groom)") +
+    ylab("DM double regression - Treatment betas (groom)") +
+    ggtitle(paste0("double Regression v Normal Betas"),
+    subtitle = paste0("Treatment, c",cluster))
+  ggsave(paste0("~/Dropbox (Personal)/scRNA/SGE_DM/doubleRegress/figures/",cluster,"_groomBetas_Trt.png"))
+}
+
+```
+
