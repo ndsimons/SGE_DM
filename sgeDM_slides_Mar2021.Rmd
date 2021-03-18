@@ -163,7 +163,7 @@ if ( "dmResidDataFrame.txt" %in% plotFilesList ) {
   dmResidDF$DMresid <- unlist(sge_NC_DMpbResid_matrix[geneNum,])
   dmResidDF$mean <- unlist(sge_NC_pbMean_matrix[geneNum,])
   
-  write.table(x = rawDataDF, file = paste0(plotDataDir,"dmResidDataFrame.txt"))
+  write.table(x = dmResidDF, file = paste0(plotDataDir,"dmResidDataFrame.txt"))
 }
 
 
@@ -385,7 +385,7 @@ varMean <- ggplot(data = rawDataDF, aes(x = mean, y = var)) +
   theme_minimal()
 
 varMean
-ggsave(paste0(figDir,"2_resid_var_v_pbMean_ge__by_individual_c",cluster,".png"))
+ggsave(paste0(figDir,"2_resid_var_v_pbMean_ge__by_individual_c02.png"))
 
 dmMean <- ggplot(data = rawDataDF, aes(x = mean, y = DM)) +
   geom_point(alpha=0.5, col = dmColor) +
@@ -395,11 +395,11 @@ dmMean <- ggplot(data = rawDataDF, aes(x = mean, y = DM)) +
   theme_minimal()
 
 dmMean
-ggsave(paste0(figDir,"2_resid_DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
+ggsave(paste0(figDir,"2_resid_DMpb_v_pbMean_ge__by_individual_c02.png"))
 
 
 plot_grid(varMean,dmMean, ncol = 2)
-ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster,".png"))
+ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c02.png"))
 
 
 #cutoff at GE of 4
@@ -407,16 +407,16 @@ ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster
 varMean <- varMean + xlim(c(0,4)) + ylim(c(0,100))
 
 varMean
-ggsave(paste0(figDir,"2_resid_var_v_pbMean_ge__by_individual_c",cluster,"_xlim4.png"))
+ggsave(paste0(figDir,"2_resid_var_v_pbMean_ge__by_individual_c02_xlim4.png"))
 
 dmMean <- dmMean
 
 dmMean
-ggsave(paste0(figDir,"2_resid_DMpb_v_pbMean_ge__by_individual_c",cluster,"_xlim4.png"))
+ggsave(paste0(figDir,"2_resid_DMpb_v_pbMean_ge__by_individual_c02_xlim4.png"))
 
 
 plot_grid(varMean,dmMean, ncol = 2)
-ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster,"_xlim4.png"))
+ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c02_xlim4.png"))
 
 ```
 
@@ -437,7 +437,7 @@ varCor <- ggplot(corDF, aes(x = varMeanCors)) +
 
 plot_grid(varCor, dmCor, nrow = 2)
 
-ggsave(paste0(figDir,"3_DMpb_and_var_correlation_with_mean_c",cluster,".png"))
+ggsave(paste0(figDir,"3_DMpb_and_var_correlation_with_mean_c02.png"))
 
 ```
 
@@ -455,7 +455,7 @@ ggplot(dmResidforGG, aes(x = mean, y = value, color = variable)) +
   xlab("Mean") + ylab("Variance") +
   theme_minimal()
 
-ggsave(paste0(figDir,"4_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster,".png"))
+ggsave(paste0(figDir,"4_resid_DMpb_and_var_v_pbMean_ge__by_individual_c02.png"))
 
 ```
 
@@ -657,6 +657,8 @@ for (variable in c("aggRec","groom")) {
 
 betaHistDF <- as.data.frame(cellClust)
 
+betaHistDF$cellClust <- as.character(betaHistDF$cellClust)
+
 betaHistDF$behaveVar <- behaveVar
 betaHistDF$treatCond <- treatCond
 betaHistDF$geneName <- geneName
@@ -669,13 +671,13 @@ ggplot(betaHistAgRec, aes(x = betaVal, y = cellClust, group = cellClust, color =
   geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Agonisms Received")
 
-ggsave(paste0(figDir,"/sigBetas_allCells_agRec_density.png"))
+ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_density.png"))
 
 ggplot(betaHistAgRec, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
   geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Agonisms Received")
 
-ggsave(paste0(figDir,"/sigBetas_allCells_agRec_hist.png"))
+ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_hist.png"))
 
 
 betaHistGroom <- subset(betaHistDF, behaveVar == "groom")
@@ -684,13 +686,13 @@ ggplot(betaHistGroom, aes(x = betaVal, y = cellClust, group = cellClust, color =
   geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Overall Grooming")
 
-ggsave(paste0(figDir,"/sigBetas_allCells_groom_density.png"))
+ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_density.png"))
 
 ggplot(betaHistGroom, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
   geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Overall Grooming")
 
-ggsave(paste0(figDir,"/sigBetas_allCells_groom_hist.png"))
+ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_hist.png"))
 
 ```
 

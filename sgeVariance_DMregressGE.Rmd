@@ -851,9 +851,9 @@ write.table(trtFDR, file = paste0(workDir,"treatmentFDRcounts.txt"), quote = F, 
 write.table(elotrtFDR, file = paste0(workDir,"eloTrtFDRcounts.txt"), quote = F, sep = ",")
 write.table(agRectrtFDR, file = paste0(workDir,"agRecTrtFDRcounts.txt"), quote = F, sep = ",")
 write.table(groomtrtFDR, file = paste0(workDir,"groomTrtFDRcounts.txt"), quote = F, sep = ",")
-write.table(elotrtFDR, file = paste0(workDir,"eloncFDRcounts.txt"), quote = F, sep = ",")
-write.table(agRectrtFDR, file = paste0(workDir,"agRecncFDRcounts.txt"), quote = F, sep = ",")
-write.table(groomtrtFDR, file = paste0(workDir,"groomncFDRcounts.txt"), quote = F, sep = ",")
+write.table(eloncFDR, file = paste0(workDir,"eloncFDRcounts.txt"), quote = F, sep = ",")
+write.table(agRecncFDR, file = paste0(workDir,"agRecncFDRcounts.txt"), quote = F, sep = ",")
+write.table(groomncFDR, file = paste0(workDir,"groomncFDRcounts.txt"), quote = F, sep = ",")
 
 ###Want to do some kable kabbler stuff here to make this easier
 
