@@ -1,0 +1,696 @@
+---
+title: "sgeDM_slides_Mar2021"
+author: "c ryan"
+date: "3/17/2021"
+output: html_document
+---
+
+```{r libraries}
+library(ggplot2)
+library(cowplot)
+library(viridis)
+library(ggridges)
+
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/DM_slides/"
+figDir <- paste0(workDir,"figures/")
+plotDataDir <- paste0(workDir,"plotData/")
+
+dir.create(figDir)
+dir.create(plotDataDir)
+
+varColor <- scales::viridis_pal()(4)[2]
+dmColor <- scales::viridis_pal()(4)[3]
+
+```
+
+
+```{r import some data}
+
+plotFilesList <- list.files(plotDataDir)
+
+
+if ( "clusterCellID.txt" %in% plotFilesList ) {
+  clusterCellID <- read.table(file = paste0(plotDataDir,"clusterCellID.txt"))
+} else {
+
+clusterCellID <- as.data.frame(c("00","14","02","05","06","07"))
+colnames(clusterCellID) <- "cluster"
+clusterCellID$cellID <- c("CD8A",
+                          "CD4",
+                          "NK",
+                          "Bcells",
+                          "CD14hi",
+                          "CD14low")
+
+write.table(x = clusterCellID, file = paste0(plotDataDir,"clusterCellID.txt"))
+}
+
+cluster <- clusterCellID$cluster[3]
+
+
+if ( "correlationsDataFrame.txt" %in% plotFilesList & 
+     "rawDataFrame.txt" %in% plotFilesList ) {
+  
+  corDF <- read.table(file = paste0(plotDataDir,"correlationsDataFrame.txt"))
+  rawDataDF <- read.table(file = paste0(plotDataDir,"rawDataFrame.txt")) 
+  
+} else {
+
+  #raw means and variances
+  #just using NC and cluster 02 | NK
+  clusterDouble <- paste0(floor(cluster/10),cluster %% 10)
+  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",clusterDouble,"_pbMean_matrix"))
+  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",clusterDouble,"_DMpb_matrix"))
+  sge_NC_var_matrix <- read.table(paste0(workDir,"data/sge_NC_c",clusterDouble,"_var_matrix"))
+  
+  numberNAs <- vector()
+  
+  for (r in 1:dim(sge_NC_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_NC_DMpb_matrix[r,]))
+  }
+  
+  sge_NC_DMpb_matrix <- sge_NC_DMpb_matrix[numberNAs < 1,]
+  
+  ## only use common set of genes - must exist in all matrices (8)
+  geneList <- rownames(table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_NC_var_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_NC_var_matrix))) == 3]
+  
+  geneList <- geneList[geneList != "chrMT"]
+  
+  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+  
+  for (fObj in apropos("^sge_[NL][CP]")) {
+    tmpObj <- get(fObj)
+    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+    
+    ## fix MO - 77_06 ID
+    if (sum(colnames(tmpObj) == "X77_06") > 0) {
+      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    }
+    #sort the columns by ID to match metadata
+    tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    
+    #reassign the temp object to the sge_NC, etc
+    assign(x = fObj, value = tmpObj)
+  }
+  
+  ##########################################################################################
+  ### Check for correlationsDataFrame
+  #corDF <- read.table(file = paste0(plotDataDir,"correlationsDataFrame.txt"))
+  
+  dmMeanCors <- vector()
+  varMeanCors <- vector()
+  
+  for (i in 1:nInd) {
+    dmMeanCors[i] <- cor(sge_NC_DMpb_matrix[,i], sge_NC_pbMean_matrix[,i])
+    varMeanCors[i] <- cor(sge_NC_var_matrix[,i], sge_NC_pbMean_matrix[,i])
+  }
+  
+  corDF <- as.data.frame(dmMeanCors)
+  
+  corDF$varMeanCors <- varMeanCors
+  
+  write.table(x = corDF, file = paste0(plotDataDir,"correlationsDataFrame.txt"))
+  
+  ##########################################################################################
+  ###check for radDataDF
+  #rawDataDF <- read.table(file = paste0(plotDataDir,"rawDataFrame.txt"))
+  
+  #single individual for slides 1 & 2
+  ind <- 14
+  
+  rawDataDF <- as.data.frame(sge_NC_pbMean_matrix[,ind])
+  colnames(rawDataDF) <- "mean"
+  
+  rawDataDF$var <- sge_NC_var_matrix[,ind]
+  rawDataDF$DM <- sge_NC_DMpb_matrix[,ind]
+  
+  write.table(x = rawDataDF, file = paste0(plotDataDir,"rawDataFrame.txt"))
+}
+
+##########################################################################################
+###check for residDF
+### Regress mean out of gene data
+
+if ( "dmResidDataFrame.txt" %in% plotFilesList ) {
+  dmResidDF <- read.table(file = paste0(plotDataDir,"dmResidDataFrame.txt"))
+  
+} else {
+
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpb_matrix
+  
+  #measure the means, so i can correct for the differences in the mean in the residuals
+  NC_DMmeans <- rowMeans(sge_NC_DMpbResid_matrix)
+  
+  for (g in 1:dim(sge_NC_DMpb_matrix)[1]) {
+    tmpData <- as.data.frame(cbind(t(sge_NC_pbMean_matrix[g,]),t(sge_NC_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_NC_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+  }
+  
+  geneNum <- 2500
+  
+  #add the average DM for NC and LPS back in
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpbResid_matrix + NC_DMmeans
+  
+  dmResidDF <- as.data.frame(unlist(sge_NC_DMpb_matrix[geneNum,]))
+  colnames(dmResidDF) <- "DM"
+  
+  dmResidDF$DMresid <- unlist(sge_NC_DMpbResid_matrix[geneNum,])
+  dmResidDF$mean <- unlist(sge_NC_pbMean_matrix[geneNum,])
+  
+  write.table(x = rawDataDF, file = paste0(plotDataDir,"dmResidDataFrame.txt"))
+}
+
+
+##########################################################################################
+###check for DMeffectDF
+
+if ( "dmEffectDataFrame.txt" %in% plotFilesList ) {
+  DMeffectDF <- read.table(file = paste0(plotDataDir,"dmEffectDataFrame.txt"))
+} else {
+
+  geneName <- "SH2D1A"
+  geneNum <- which(rownames(sge_NC_pbMean_matrix) == geneName)
+  
+  DMeffectDF <- as.data.frame(unlist(sge_NC_pbMean_matrix[geneNum,]))
+  
+  colnames(DMeffectDF) <- "mean"
+  
+  DMeffectDF$DM <- unlist(sge_NC_DMpbResid_matrix[geneNum,])
+  DMeffectDF$agRec <- metadata$aggRec_cent
+  DMeffectDF$groom <- metadata$groom_cent
+  
+  write.table(x = DMeffectDF, file = paste0(plotDataDir,"dmEffectDataFrame.txt"))
+}
+
+
+##########################################################################################
+
+# for (cluster in clusterCellID$cluster) {
+#   clusterDouble <- paste0(floor(cluster/10),cluster %% 10)
+#   #agonism received results
+#   assign(x = paste0("res_full_aggRec_DMpbRegGE_c",clusterDouble),
+#          value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_agRec_emmreml")))
+#   #groom
+#   assign(x = paste0("res_full_groom_DMpbRegGE_c",clusterDouble),
+#          value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_groom_emmreml")))
+# }
+# 
+# nInd <- dim(sge_NC_pbMean_matrix)[2]
+# indIDs <- colnames(sge_NC_pbMean_matrix)
+# 
+# #metadata
+# #pick metadata based on samples in the matrix
+# ## get some metadata ##
+# metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
+# # this file is also in SGE_DM/dataFiles
+# metadata[1,1] <- 'Mo'
+# metadata <- metadata[order(metadata$ID),]
+# metadata <- metadata[metadata$ID %in% indIDs,]
+# 
+# ## double the metadata so it includes both NC and LPS ##
+# #metadata <- rbind(metadata,metadata)
+# #metadata$trt <- rep(c('NC','LPS'), times=c(length(indIDs),length(indIDs)))
+# 
+# ## run a nested model with trt, and age and <behavior metric> nested within trt ##
+# ## elo and age have to be mean centered for nested model ##
+# metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
+# metadata$age_centered <- scale(metadata$age, center = T, scale = F)
+# 
+# behaveData <- read.table(paste0(workDir,"data/SGEII_METADATA_MASTER.txt"), header = T)
+# 
+# #phase 1 only
+# behaveData <- subset(behaveData, phase == 1)
+# 
+# #animals we need data for
+# # behave data is 2 character upper, genomic data is 4 char upper/lower
+# needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
+# 
+# #limit behavioral data to correct 45 individs
+# behaveData <- subset(behaveData, ID %in% needIDs)
+# 
+# #sort by ID
+# behaveData <- behaveData[order(behaveData$ID),]
+# 
+# #get the important variables, centered
+# metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
+# metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
+# metadata$groom_cent <- behaveData$gc.overall.groom
+
+
+if ( "betaHistDataFrame.txt" %in% plotFilesList ) {
+  betaHistDF <- read.table(file = paste0(plotDataDir,"betaHistDataFrame.txt"))
+  
+} else {
+
+  cellClust <- vector()
+  behaveVar <- vector()
+  treatCond <- vector()
+  geneName <- vector()
+  betaVal <- vector()
+  
+  
+  cellClustBinom <- vector()
+  behaveVarBinom <- vector()
+  betaUpCount <- vector()
+  betaDownCount <- vector()
+  pvalNull <- vector()
+  pvalwBetas <- vector()
+  
+  for (cluster in clusterCellID$cluster) {
+  clusterDouble <- paste0(floor(cluster/10),cluster %% 10)
+  #agonism received results
+  assign(x = paste0("res_full_aggRec_DMpbRegGE_c",clusterDouble),
+         value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_agRec_emmreml")))
+  #groom
+  assign(x = paste0("res_full_groom_DMpbRegGE_c",clusterDouble),
+         value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_groom_emmreml")))
+  }
+
+  for (variable in c("aggRec","groom")) {
+    #variable <- "aggRec"
+  
+    for (cluster in c("00","14","02","05","06","07")) {
+      #cluster <- "00"
+      
+      emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
+      
+      emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+      emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
+      
+      emrml$NCsig <- emrml[,20] < 0.10
+      emrml$LPSsig <- emrml[,21] < 0.10
+      
+      assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
+      assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+      
+      NCposRatio <- mean(emrml$NCstdBeta > 0)
+      LPSposRatio <- mean(emrml$LPSstdBeta > 0)
+  
+      for (treatment in c("NC","LPS")) {
+        #treatment <- "NC"
+        
+        if (treatment == "NC") {
+          colNum <- 22
+          betaPosRatio <- NCposRatio
+        } else {
+          colNum <- 23
+          betaPosRatio <- LPSposRatio
+        }
+        
+        posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
+        negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
+        
+        if (sum(posBetas,negBetas) > 0) {
+          #binomial test of 50-50 pos/neg betas
+          posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+          
+          #binomial test of pos/neg betas from exact distribution
+          posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
+          
+          binomPval <- posBinomBkg$p.value
+          
+          #write to giant data frame
+          #betas
+          cellClust <- c(cellClust, rep(cluster, sum(posBetas, negBetas)))
+          
+          behaveVar <- c(behaveVar, rep(variable, sum(posBetas, negBetas)))
+          
+          treatCond <- c(treatCond, rep(treatment, sum(posBetas, negBetas)))
+          
+          geneName <- c(geneName, rownames(get(paste0("plotEmrml",cluster,variable,treatment))))
+          
+          betaVal <- c(betaVal, get(paste0("plotEmrml",cluster,variable,treatment))[,colNum])
+  
+          
+        } else {
+          rm(posBinomBkg)
+          rm(posBinomNull)
+          binomPval <- NA
+        }
+        
+        ggplot() +
+          geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
+          ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
+                         dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
+          annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+          annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+          annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
+                   size = 8, hjust = .25, vjust = .5) +
+          xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
+          xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
+        
+        ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
+        
+        
+      }
+    }
+  }
+  
+  betaHistDF <- as.data.frame(cellClust)
+  
+  betaHistDF$behaveVar <- behaveVar
+  betaHistDF$treatCond <- treatCond
+  betaHistDF$geneName <- geneName
+  betaHistDF$betaVal <- betaVal
+  
+  write.table(x = betaHistDF, file = paste0(plotDataDir,"betaHistDataFrame.txt"))
+}
+
+
+
+```
+
+
+
+```{r slide 1 cv2 and mean}
+
+```
+
+```{r slide 2 variance mean relationships}
+
+
+#ind <- 14
+
+varMean <- ggplot(data = rawDataDF, aes(x = mean, y = var)) +
+  geom_point(alpha=0.5, col = varColor) +
+  stat_smooth(method='lm', color='gray40', alpha = .8, fullrange = T) +
+  xlab(paste0('Pseudobulk Mean GE - Individual ',ind)) +
+  ylab(paste0('GE Variance - Individual ',ind)) +
+  theme_minimal()
+
+varMean
+ggsave(paste0(figDir,"2_resid_var_v_pbMean_ge__by_individual_c",cluster,".png"))
+
+dmMean <- ggplot(data = rawDataDF, aes(x = mean, y = DM)) +
+  geom_point(alpha=0.5, col = dmColor) +
+  stat_smooth(method='lm', color='gray40', alpha = .8, fullrange = T) +
+  xlab(paste0('Pseudobulk Mean GE - Individual ',ind)) +
+  ylab(paste0('GE DM - Individual ',ind)) +
+  theme_minimal()
+
+dmMean
+ggsave(paste0(figDir,"2_resid_DMpb_v_pbMean_ge__by_individual_c",cluster,".png"))
+
+
+plot_grid(varMean,dmMean, ncol = 2)
+ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster,".png"))
+
+
+#cutoff at GE of 4
+
+varMean <- varMean + xlim(c(0,4)) + ylim(c(0,100))
+
+varMean
+ggsave(paste0(figDir,"2_resid_var_v_pbMean_ge__by_individual_c",cluster,"_xlim4.png"))
+
+dmMean <- dmMean
+
+dmMean
+ggsave(paste0(figDir,"2_resid_DMpb_v_pbMean_ge__by_individual_c",cluster,"_xlim4.png"))
+
+
+plot_grid(varMean,dmMean, ncol = 2)
+ggsave(paste0(figDir,"2_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster,"_xlim4.png"))
+
+```
+
+```{r slide 3 variance mean correlations}
+
+
+dmCor <- ggplot(corDF, aes(x = dmMeanCors)) +
+  geom_histogram(bins = 25, fill = dmColor) +
+  xlim(-.2,.75) +
+  xlab("DM ~ Mean Correlations") +
+  theme_minimal()
+
+varCor <- ggplot(corDF, aes(x = varMeanCors)) +
+  geom_histogram(bins = 25, fill = varColor) +
+  xlim(-.2,.75) +
+  xlab("Variance ~ Mean Correlations") +
+  theme_minimal()
+
+plot_grid(varCor, dmCor, nrow = 2)
+
+ggsave(paste0(figDir,"3_DMpb_and_var_correlation_with_mean_c",cluster,".png"))
+
+```
+
+```{r slide 4 double regression correction}
+
+dmColor <- scales::viridis_pal()(4)[3]
+dmDoubleColor <- scales::viridis_pal()(9)[8]
+
+dmResidforGG <- melt(dmResidDF[,1:2])
+dmResidforGG$mean <- c(dmResidDF$mean,dmResidDF$mean)
+
+ggplot(dmResidforGG, aes(x = mean, y = value, color = variable)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) +
+  scale_color_manual(values = c(dmColor, dmDoubleColor)) +
+  xlab("Mean") + ylab("Variance") +
+  theme_minimal()
+
+ggsave(paste0(figDir,"4_resid_DMpb_and_var_v_pbMean_ge__by_individual_c",cluster,".png"))
+
+```
+
+```{r slide 5 behavior DM results}
+
+nullColor <- scales::viridis_pal()(4)[1]
+lpsColor <- scales::viridis_pal()(4)[4]
+
+
+for (b in c("agRec","groom")) {
+  #b <- "agRec"
+  
+  #NCfdr <- read.table(paste0(workDir,"data/",b,"ncFDRCounts.txt"))
+  #LPSfdr <- read.table(paste0(workDir,"data/",b,"TrtFDRCounts.txt"))
+  
+  NCfdr <- read.csv(paste0(plotDataDir,b,"ncFDRCounts.txt"))
+  LPSfdr <- read.csv(paste0(plotDataDir,b,"TrtFDRCounts.txt"))
+
+  NCfdr <- NCfdr[,c(4,6)]
+  LPSfdr <- LPSfdr[,c(4,6)]
+  NCfdr$treatment <- "NULL"
+  LPSfdr$treatment <- "LPS"
+  NCfdr$celltype <- clusterCellID$cellID
+  LPSfdr$celltype <- clusterCellID$cellID
+  c <- rbind(NCfdr, LPSfdr)
+  
+  c$percent <- 100 * c$fdr10 / c$nGenes
+  c$percentLabel <- paste0(round(c$percent, digits = 2),"%")
+  
+  ggplot(data=c)+
+    geom_bar(aes(x=fdr10, y=celltype, group=treatment, fill=treatment),
+             stat="identity", width = .1,
+             position = position_dodge(width = 1)) +
+    theme_minimal() + scale_fill_manual(values = c(nullColor,lpsColor)) +
+    xlab("# of significant genes (10% FDR)") +
+    ylab("Celltype")+theme(text=element_text(size=16)) +
+    geom_text(aes(x=15,
+                  y=celltype,
+                  group=treatment,
+                  label=percentLabel),
+              position = position_dodge(width = 1)) +
+  theme_minimal()
+  
+  ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_",b,".png"))
+  
+}
+
+
+```
+
+```{r slide 6 mean effect v DM effect}
+
+geneName <- "SH2D1A"
+
+meanColor <- scales::viridis_pal()(4)[1]
+dmColor <- scales::viridis_pal()(4)[3]
+cluster <- "02"
+
+meanAgrec <- ggplot(DMeffectDF, aes(x = agRec, y = mean)) +
+  geom_point(col = meanColor) + xlab("Agonisms Received") + ylab("Mean") +
+  geom_smooth(method = "lm", se = FALSE, col = meanColor) +
+  ggtitle(geneName) +
+  theme_minimal()
+
+meanAgrec
+ggsave(paste0(figDir,"6_mean_v_agRec__by_individual_c",cluster,".png"))
+
+DMAgrec <- ggplot(DMeffectDF, aes(x = agRec, y = DM)) +
+  geom_point(col = dmColor) + xlab("Agonisms Received") + ylab("DM") +
+  geom_smooth(method = "lm", se = FALSE, col = dmColor) +
+  ggtitle(geneName) +
+  theme_minimal()
+
+DMAgrec
+ggsave(paste0(figDir,"6_DM_v_agRec__by_individual_c",cluster,".png"))
+
+plot_grid(meanAgrec, DMAgrec, ncol = 2)
+ggsave(paste0(figDir,"6_mean_and_DM_v_agRec__by_individual_c",cluster,".png"))
+
+meanGroom <- ggplot(DMeffectDF, aes(x = groom, y = mean)) +
+  geom_point(col = meanColor) + xlab("Overall Grooming") + ylab("Mean") +
+  geom_smooth(method = "lm", se = FALSE, col = meanColor) +
+  ggtitle(geneName) +
+  theme_minimal()
+
+meanGroom
+ggsave(paste0(figDir,"6_mean_v_groom__by_individual_c",cluster,".png"))
+
+DMgroom <- ggplot(DMeffectDF, aes(x = groom, y = DM)) +
+  geom_point(col = dmColor) + xlab("Overall Grooming") + ylab("DM") +
+  geom_smooth(method = "lm", se = FALSE, col = dmColor) +
+  ggtitle(geneName) +
+  theme_minimal()
+
+DMgroom
+ggsave(paste0(figDir,"6_DM_v_groom__by_individual_c",cluster,".png"))
+
+plot_grid(meanAgrec, DMgroom, ncol = 2)
+ggsave(paste0(figDir,"6_mean_and_DM_v_groom__by_individual_c",cluster,".png"))
+
+```
+
+```{r slide 7 sig beta assymetry}
+cellClust <- vector()
+behaveVar <- vector()
+treatCond <- vector()
+geneName <- vector()
+betaVal <- vector()
+
+
+cellClustBinom <- vector()
+behaveVarBinom <- vector()
+betaUpCount <- vector()
+betaDownCount <- vector()
+pvalNull <- vector()
+pvalwBetas <- vector()
+
+
+
+for (variable in c("aggRec","groom")) {
+  #variable <- "aggRec"
+
+  for (cluster in c("00","14","02","05","06","07")) {
+    #cluster <- "00"
+    
+    emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
+    
+    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
+    
+    emrml$NCsig <- emrml[,20] < 0.10
+    emrml$LPSsig <- emrml[,21] < 0.10
+    
+    assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
+    assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+    
+    NCposRatio <- mean(emrml$NCstdBeta > 0)
+    LPSposRatio <- mean(emrml$LPSstdBeta > 0)
+
+    for (treatment in c("NC","LPS")) {
+      #treatment <- "NC"
+      
+      if (treatment == "NC") {
+        colNum <- 22
+        betaPosRatio <- NCposRatio
+      } else {
+        colNum <- 23
+        betaPosRatio <- LPSposRatio
+      }
+      
+      posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
+      negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
+      
+      if (sum(posBetas,negBetas) > 0) {
+        #binomial test of 50-50 pos/neg betas
+        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
+        
+        binomPval <- posBinomBkg$p.value
+        
+        #write to giant data frame
+        #betas
+        cellClust <- c(cellClust, rep(cluster, sum(posBetas, negBetas)))
+        
+        behaveVar <- c(behaveVar, rep(variable, sum(posBetas, negBetas)))
+        
+        treatCond <- c(treatCond, rep(treatment, sum(posBetas, negBetas)))
+        
+        geneName <- c(geneName, rownames(get(paste0("plotEmrml",cluster,variable,treatment))))
+        
+        betaVal <- c(betaVal, get(paste0("plotEmrml",cluster,variable,treatment))[,colNum])
+
+        
+      } else {
+        rm(posBinomBkg)
+        rm(posBinomNull)
+        binomPval <- NA
+      }
+      
+      ggplot() +
+        geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
+        ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
+                       dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
+        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
+                 size = 8, hjust = .25, vjust = .5) +
+        xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
+        xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
+      
+      ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
+      
+      
+    }
+  }
+}
+
+betaHistDF <- as.data.frame(cellClust)
+
+betaHistDF$behaveVar <- behaveVar
+betaHistDF$treatCond <- treatCond
+betaHistDF$geneName <- geneName
+betaHistDF$betaVal <- betaVal
+
+
+betaHistAgRec <- subset(betaHistDF, behaveVar == "aggRec")
+
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+  geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ggtitle("Agonisms Received")
+
+ggsave(paste0(figDir,"/sigBetas_allCells_agRec_density.png"))
+
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+  geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ggtitle("Agonisms Received")
+
+ggsave(paste0(figDir,"/sigBetas_allCells_agRec_hist.png"))
+
+
+betaHistGroom <- subset(betaHistDF, behaveVar == "groom")
+
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+  geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ggtitle("Overall Grooming")
+
+ggsave(paste0(figDir,"/sigBetas_allCells_groom_density.png"))
+
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+  geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ggtitle("Overall Grooming")
+
+ggsave(paste0(figDir,"/sigBetas_allCells_groom_hist.png"))
+
+```
+

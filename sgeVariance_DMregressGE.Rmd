@@ -144,7 +144,7 @@ paste0("In total, we measured gene expression in ",totCells,
 iters <- 10
 
 #only run cluster 7 as a test
-for (cluster in c("00","14","02","05","06","07")[5]) {
+for (cluster in c("00","14","02","05","06","07")) {
   #cluster <- "14"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
@@ -201,7 +201,7 @@ for (cluster in c("00","14","02","05","06","07")[5]) {
   sge_LPS_DMpbResid_matrix <- sge_LPS_DMpb_matrix
   sge_NC_DMpbResid_matrix <- sge_NC_DMpb_matrix
   
-  #meaasure the means, so i can correct for the differences in the mean in the residuals
+  #measure the means, so i can correct for the differences in the mean in the residuals
   LPS_DMmeans <- rowMeans(sge_LPS_DMpbResid_matrix)
   NC_DMmeans <- rowMeans(sge_NC_DMpbResid_matrix)
   
@@ -680,6 +680,7 @@ for (cluster in c("00","14","02","05","06","07")[5]) {
   }
   
 }
+
 
 ```
 
