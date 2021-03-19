@@ -498,6 +498,21 @@ for (b in c("agRec","groom")) {
                   label=percentLabel),
               position = position_dodge(width = 1)) +
   theme_minimal()
+  ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_",b,"_old.png"))
+  
+  
+  c$trtNum <- ifelse(c$treatment == "NULL", 2 * max(c$percent), 0)
+  
+  ggplot() +
+    geom_bar(data = c, aes(x = fdr10, y=paste0(celltype,"_",treatment), fill = trtNum),
+             stat="identity", width = .66,
+             position = position_dodge(width = 1)) + scale_fill_viridis() +
+    geom_tile(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), fill = percent), width = max(c$fdr10)/9) +
+    geom_text(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
+    theme_minimal()
+  
+    #scale_fill_manual(values = c(nullColor,lpsColor))
+  
   
   ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_",b,".png"))
   

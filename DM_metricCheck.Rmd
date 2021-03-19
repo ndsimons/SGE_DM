@@ -1,0 +1,209 @@
+---
+title: "DM"
+author: "c ryan"
+date: "3/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(scran)
+
+library(ggplot2)
+library(cowplot)
+library(viridis)
+library(ggridges)
+
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/DM_slides/"
+figDir <- paste0(workDir,"figures/")
+plotDataDir <- paste0(workDir,"plotData/")
+
+```
+
+```{r toy data with plots}
+# Mocking up some data
+ngenes <- 1000
+ncells <- 100
+gene.means <- 2^runif(ngenes, 0, 10)
+#some adjustments to make data more similar to ours
+#gene.means <- 2^runif(ngenes, 0, 3) - .95
+dispersions <- 1/gene.means + 0.2
+counts <- matrix(rnbinom(ngenes*ncells, mu=gene.means, size=1/dispersions), nrow=ngenes)
+
+# Computing the DM.
+means <- rowMeans(counts)
+cv2 <- apply(counts, 1, var)/means^2
+dm.stat <- DM(means, cv2)
+head(dm.stat)
+
+for (randGene in c(1,100,200,which(dm.stat == min(dm.stat)),which(dm.stat == max(dm.stat)))) {
+
+  ggplot() +
+    geom_point(aes(x = log10(means), y = log10(cv2)), alpha = .5) + 
+    geom_point(aes(x = log10(means[randGene]), y = log10(cv2[randGene])), size = 2, col = "red") +
+    geom_point(aes(x = log10(means), y = (med.trend)), col = "blue", size = .5) +
+    geom_segment(aes(x = log10(means[randGene]), y = log10(cv2[randGene]), 
+                     xend = log10(means[randGene]), yend = log10(cv2[randGene]) - dm.stat[randGene]), lwd = 1.1, col = "red") +
+    ggtitle("DM Manual Example (Random Data)")
+    
+  ggsave(paste0(figDir,"1_DM_testData_",randGene,".png"))
+}
+
+```
+
+```{r nitty gritty}
+
+win.size <- 51
+
+keep <- means > 0 & !is.na(cv2) & cv2 > 0
+mean.expr <- log10(means[keep])
+
+cv2.expr <- log10(cv2[keep])
+
+o <- order(mean.expr)
+
+med.trend <- runmed(cv2.expr[o], k = win.size)
+med.trend[o] <- med.trend
+dm.out <- cv2.expr - med.trend
+DM <- rep(NA_real_, length(keep))
+DM[keep] <- dm.out
+names(DM) <- names(mean)
+
+#do the values match?
+all(DM == dm.stat)
+
+
+
+for (randGene in c(1,100,200,which(dm.stat == min(dm.stat)),which(dm.stat == max(dm.stat)))) {
+
+  ggplot() +
+    geom_point(aes(x = log10(means), y = log10(cv2)), alpha = .5) + 
+    geom_point(aes(x = log10(means[randGene]), y = log10(cv2[randGene])), size = 2, col = "red") +
+    geom_point(aes(x = log10(means), y = (med.trend)), col = "blue", size = .5) +
+    geom_segment(aes(x = log10(means[randGene]), y = log10(cv2[randGene]), 
+                     xend = log10(means[randGene]), yend = log10(cv2[randGene]) - dm.stat[randGene]), lwd = 1.1, col = "red") +
+    ggtitle("DM Manual Example (Random Data)")
+    
+  ggsave(paste0(figDir,"1_DM_testData_",randGene,".png"))
+}
+
+```
+
+
+
+
+
+```{r real data}
+#NC cluster 02 / NK again
+
+realCV2 <- read.table(paste0(plotDataDir,"sge_NC_c02_CV2_forPlot"), header = T)
+tmp <- realCV2$Cl13
+names(tmp) <- realCV2$Rz6
+realCV2 <- tmp
+realCV2 <- realCV2[(!is.na(realCV2))]
+
+
+pbMean <- read.table(paste0(plotDataDir,"sge_NC_c02_pbMean_forPlot"), header = T)
+tmp <- pbMean$Cl13
+names(tmp) <- pbMean$Rz6
+pbMean <- tmp
+pbMean <- pbMean[names(pbMean) %in% names(realCV2)]
+
+
+# Computing the DM.
+DMpbLocal <- DM(pbMean, realCV2)
+head(DMpbLocal)
+
+#By Hand
+win.size <- 51
+
+keep <- pbMean > 0 & !is.na(realCV2) & realCV2 > 0
+mean.expr <- log10(pbMean[keep])
+
+cv2.expr <- log10(realCV2[keep])
+
+o <- order(mean.expr)
+
+med.trend <- runmed(cv2.expr[o], k = win.size)
+med.trend[o] <- med.trend
+dm.outReal <- cv2.expr - med.trend
+DMreal <- rep(NA_real_, length(keep))
+DMreal[keep] <- dm.outReal
+names(DMreal) <- names(pbMean)
+
+#do the values match?
+all(DMreal == DMpbLocal)
+
+
+for (randGene in c(1,1000,2000,which(DMpbLocal == min(DMpbLocal)),which(DMpbLocal == max(DMpbLocal)))) {
+  ggplot() +
+    geom_point(aes(x = log10(pbMean), y = log10(realCV2)), alpha = .5) +
+    geom_point(aes(x = log10(pbMean), y = (med.trend)), col = "blue", size = .5) +
+    geom_point(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene])), size = 2, col = "red") +
+    geom_segment(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene]), 
+                       xend = log10(pbMean[randGene]), yend = log10(realCV2[randGene]) - DMpbLocal[randGene]), lwd = 1.1, col = "red") +
+  ggtitle("DM Manual Example (Real Data)")
+    
+  ggsave(paste0(figDir,"1_DM_realData_",randGene,".png"))
+}
+```
+
+
+```{r real data filtered}
+#NC cluster 02 / NK again
+
+assign(x = paste0("emmreml_clust02"),
+         value = read.table(paste0(workDir,"data/results_c02_agRec_emmreml")))
+
+filtGenes <- rownames(emmreml_clust02)
+
+realCV2 <- read.table(paste0(plotDataDir,"sge_NC_c02_CV2_forPlot"), header = T)
+tmp <- realCV2$Cl13
+names(tmp) <- realCV2$Rz6
+realCV2 <- tmp
+realCV2 <- realCV2[names(realCV2) %in% filtGenes]
+
+pbMean <- read.table(paste0(plotDataDir,"sge_NC_c02_pbMean_forPlot"), header = T)
+tmp <- pbMean$Cl13
+names(tmp) <- pbMean$Rz6
+pbMean <- tmp
+pbMean <- pbMean[names(pbMean) %in% filtGenes]
+
+
+# Computing the DM.
+DMpbLocal <- DM(pbMean, realCV2)
+head(DMpbLocal)
+
+#By Hand
+win.size <- 51
+
+keep <- pbMean > 0 & !is.na(realCV2) & realCV2 > 0
+mean.expr <- log10(pbMean[keep])
+
+cv2.expr <- log10(realCV2[keep])
+
+o <- order(mean.expr)
+
+med.trend <- runmed(cv2.expr[o], k = win.size)
+med.trend[o] <- med.trend
+dm.outReal <- cv2.expr - med.trend
+DMreal <- rep(NA_real_, length(keep))
+DMreal[keep] <- dm.outReal
+names(DMreal) <- names(pbMean)
+
+#do the values match?
+all(DMreal == DMpbLocal)
+
+
+for (randGene in c(30,1985,552,which(DMpbLocal == min(DMpbLocal)),which(DMpbLocal == max(DMpbLocal)))) {
+  ggplot() +
+    geom_point(aes(x = log10(pbMean), y = log10(realCV2)), alpha = .5) +
+    geom_point(aes(x = log10(pbMean), y = (med.trend)), col = "blue", size = .5) +
+    geom_point(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene])), size = 2, col = "red") +
+    geom_segment(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene]), 
+                       xend = log10(pbMean[randGene]), yend = log10(realCV2[randGene]) - DMpbLocal[randGene]), lwd = 1.1, col = "red") +
+  ggtitle("DM Manual Example (Real Data)")
+    
+  ggsave(paste0(figDir,"1_DM_realData_filtered_",randGene,".png"))
+}
+
+```
