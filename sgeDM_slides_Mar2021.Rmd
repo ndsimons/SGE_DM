@@ -368,9 +368,6 @@ if ( "betaHistDataFrame.txt" %in% plotFilesList ) {
 
 
 
-```{r slide 1 cv2 and mean}
-
-```
 
 ```{r slide 2 variance mean relationships}
 
