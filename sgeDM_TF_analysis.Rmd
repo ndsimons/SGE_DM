@@ -1,0 +1,122 @@
+---
+title: "sgeDM_TF_analysis"
+author: "c ryan"
+date: "3/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(cowplot)
+library(stringr)
+
+workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/TFanalysis/"
+figDir <- paste0(workDir,"figures/")
+
+dir.create(figDir)
+
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r data}
+
+pData <- "~/Dropbox (Personal)/scRNA/SGE_DM/paulData/tfData/"
+
+weightMat.c00.aggRec.LPS <- readRDS(paste0(pData,"weightmat_cluster_0_LPS_gc.overall.agg.rec.RDS"))
+weightMat.c00.aggRec.NC <- readRDS(paste0(pData,"weightmat_cluster_0_NC_gc.overall.agg.rec.RDS"))
+weightMat.c02.aggRec.LPS <- readRDS(paste0(pData,"weightmat_cluster_2_LPS_gc.overall.agg.rec.RDS"))
+weightMat.c02.aggRec.NC <- readRDS(paste0(pData,"weightmat_cluster_2_NC_gc.overall.agg.rec.RDS"))
+
+TFVS.c00.aggRec.LPS <- readRDS(paste0(pData,"TF_very_strong_links_reduced_celltype_CD8_A_at_LPS.RDS"))
+TFVS.c00.aggRec.NC <- readRDS(paste0(pData,"TF_very_strong_links_reduced_celltype_CD8_A_at_NC.RDS"))
+TFVS.c02.aggRec.LPS <- readRDS(paste0(pData,"TF_very_strong_links_reduced_celltype_NK_at_LPS.RDS"))
+TFVS.c02.aggRec.NC <- readRDS(paste0(pData,"TF_very_strong_links_reduced_celltype_NK_at_NC.RDS"))
+
+
+
+```
+
+
+count the targets using str_count
+```{r count targets}
+
+TFVS.c00.aggRec.LPS$targetCount <- 0
+TFVS.c00.aggRec.NC$targetCount <- 0
+TFVS.c02.aggRec.LPS$targetCount <- 0
+TFVS.c02.aggRec.NC$targetCount <- 0
+
+for (t in 1:dim(TFVS.c00.aggRec.LPS)[1]) {
+  TFVS.c00.aggRec.LPS$targetCount[t] <- str_count(string = TFVS.c00.aggRec.LPS$target[t], pattern = ",") + 1
+}
+
+for (t in 1:dim(TFVS.c00.aggRec.NC)[1]) {
+  TFVS.c00.aggRec.NC$targetCount[t] <- str_count(string = TFVS.c00.aggRec.NC$target[t], pattern = ",") + 1
+}
+
+for (t in 1:dim(TFVS.c02.aggRec.LPS)[1]) {
+  TFVS.c02.aggRec.LPS$targetCount[t] <- str_count(string = TFVS.c02.aggRec.LPS$target[t], pattern = ",") + 1
+}
+
+for (t in 1:dim(TFVS.c02.aggRec.NC)[1]) {
+  TFVS.c02.aggRec.NC$targetCount[t] <- str_count(string = TFVS.c02.aggRec.NC$target[t], pattern = ",") + 1
+}
+
+
+#in weightMat only
+TFVS.c00.aggRec.LPSinWM <- TFVS.c00.aggRec.LPS[TFVS.c00.aggRec.LPS$TF %in% rownames(weightMat.c00.aggRec.LPS),]
+TFVS.c00.aggRec.NCinWM <- TFVS.c00.aggRec.NC[TFVS.c00.aggRec.NC$TF %in% rownames(weightMat.c00.aggRec.NC),]
+TFVS.c02.aggRec.LPSinWM <- TFVS.c02.aggRec.LPS[TFVS.c02.aggRec.LPS$TF %in% rownames(weightMat.c02.aggRec.LPS),]
+TFVS.c02.aggRec.NCinWM <- TFVS.c02.aggRec.NC[TFVS.c02.aggRec.NC$TF %in% rownames(weightMat.c02.aggRec.NC),]
+
+```
+
+```{r plot results}
+nBins <- 100
+
+lps00 <- ggplot(data = TFVS.c00.aggRec.LPS, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c00 - LPS - aggRec; n=",dim(TFVS.c00.aggRec.LPS)[1]))
+
+nc00 <- ggplot(data = TFVS.c00.aggRec.NC, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c00 - NC - aggRec; n=",dim(TFVS.c00.aggRec.NC)[1]))
+
+lps02 <- ggplot(data = TFVS.c02.aggRec.LPS, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c02 - LPS - aggRec; n=",dim(TFVS.c02.aggRec.LPS)[1]))
+
+nc02 <- ggplot(data = TFVS.c02.aggRec.NC, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c02 - NC - aggRec; n=",dim(TFVS.c02.aggRec.NC)[1]))
+
+plot_grid(lps00, nc00, lps02, nc02, ncol = 2)
+ggsave(paste0(figDir,"geneTargets_per_TF_hist.png"))
+
+#weightmat only
+
+lps00 <- ggplot(data = TFVS.c00.aggRec.LPSinWM, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c00 - LPS - aggRec; n=",dim(TFVS.c00.aggRec.LPSinWM)[1]))
+
+nc00 <- ggplot(data = TFVS.c00.aggRec.NCinWM, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c00 - NC - aggRec; n=",dim(TFVS.c00.aggRec.NCinWM)[1]))
+
+lps02 <- ggplot(data = TFVS.c02.aggRec.LPSinWM, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c02 - LPS - aggRec; n=",dim(TFVS.c02.aggRec.LPSinWM)[1]))
+
+nc02 <- ggplot(data = TFVS.c02.aggRec.NCinWM, aes(x = targetCount)) +
+  geom_histogram(bins = nBins) + xlab("TF's Number of Gene Targets") +
+  ggtitle(paste0("c02 - NC - aggRec; n=",dim(TFVS.c02.aggRec.NCinWM)[1]))
+
+plot_grid(lps00, nc00, lps02, nc02, ncol = 2)
+ggsave(paste0(figDir,"geneTargets_per_TF_weightMat_hist.png"))
+```
+

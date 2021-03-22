@@ -1069,8 +1069,11 @@ sigGenesGroom <- colSums(sigGenes[19:30,1:4])
 #trtP <- binom.test(sigGenesTrt[2], sum(sigGenesTrt[1:2]), p = sigGenesTrt[4]/sum(sigGenesTrt[3:4]))
 print("groom")
 agRecP <- binom.test(sigGenesagRec[2], sum(sigGenesagRec[1:2]), p = sigGenesagRec[4]/sum(sigGenesagRec[3:4]))
+agRecP$p.value
+
 print("agRec")
 groomP <- binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroom[4]/sum(sigGenesGroom[3:4]))
+groomP$p.value
 ```
 
 
@@ -1078,11 +1081,24 @@ groomP <- binom.test(sigGenesGroom[2], sum(sigGenesGroom[1:2]), p = sigGenesGroo
 
 gg3col <- gg_color_hue(3)
 
+cellClustFET <- vector()
+behaveVarFET <- vector()
+treatCondFET <- vector()
+dmSigFET <- vector()
+mnSigFET <- vector()
+bothSigFET <- vector()
+neitherSigFET <- vector()
+pvalFET <- vector()
+oddsFET <- vector()
+confHiFET <- vector()
+confLoFET <- vector()
+
+
 for (cluster in c("00","02","14","05","06","07")) {
   #cluster <- "00"
   
   for (variable in c("aggRec","groom","elo")) {
-    #variable <- "elo"
+    #variable <- "aggRec"
     
     paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
                                          (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
@@ -1194,6 +1210,11 @@ for (cluster in c("00","02","14","05","06","07")) {
                                 " Rsq=",round(cor(lpsResults$LPSstdBetaMean,lpsResults$LPSstdBetaDM)^2,digits = 4)))
     
     ggsave(paste0(figDir,"/stdBetas_DM_v_mean_",variable,"x",treatment,"_c",cluster,".png"))
+    
+    ncFET <- matrix(c(sum(ncResults$combSig == "both"),sum(ncResults$combSig == "mean"),sum(ncResults$combSig == "dm"),sum(ncResults$combSig == "neither")), ncol = 2, byrow = T)
+    ncFETresults <- fisher.test(ncFET)
+    lpsFET <- matrix(c(sum(lpsResults$combSig == "both"),sum(lpsResults$combSig == "mean"),sum(lpsResults$combSig == "dm"),sum(lpsResults$combSig == "neither")), ncol = 2, byrow = T)
+    lpsFETresults <- fisher.test(lpsFET)
   
   
   
@@ -1247,9 +1268,67 @@ for (cluster in c("00","02","14","05","06","07")) {
       
         ggsave(paste0(figDir,"/stdBetas_DM_v_mean_Treatment_fdr",as.character(fdrLvl),"_c",cluster,".png"))
       }
+    } else {
+      ncFET <- matrix(c(sum(ncResults$combSig == "both"),
+                        sum(ncResults$combSig == "mean"),
+                        sum(ncResults$combSig == "dm"),
+                        sum(ncResults$combSig == "neither")), ncol = 2, byrow = T)
+      ncFETresults <- fisher.test(ncFET)
+            
+      
+      cellClustFET <- c(cellClustFET, cluster)
+      behaveVarFET <- c(behaveVarFET, variable)
+      treatCondFET <- c(treatCondFET, "NC")
+      dmSigFET <- c(dmSigFET,sum(ncResults$combSig == "dm"))
+      mnSigFET <- c(mnSigFET,sum(ncResults$combSig == "mean"))
+      bothSigFET <- c(bothSigFET,sum(ncResults$combSig == "both"))
+      neitherSigFET <- c(neitherSigFET,sum(ncResults$combSig == "neither"))
+      pvalFET <- c(pvalFET,ncFETresults$p.value)
+      oddsFET <- c(oddsFET,ncFETresults$estimate)
+      confLoFET <- c(confLoFET,lpsFETresults$conf.int[1])
+      confHiFET <- c(confHiFET,lpsFETresults$conf.int[2])
+
+
+      
+      
+      lpsFET <- matrix(c(sum(lpsResults$combSig == "both"),
+                         sum(lpsResults$combSig == "mean"),
+                         sum(lpsResults$combSig == "dm"),
+                         sum(lpsResults$combSig == "neither")), ncol = 2, byrow = T)
+      lpsFETresults <- fisher.test(lpsFET)
+
+      
+      cellClustFET <- c(cellClustFET, cluster)
+      behaveVarFET <- c(behaveVarFET, variable)
+      treatCondFET <- c(treatCondFET, "LPS")
+      dmSigFET <- c(dmSigFET,sum(lpsResults$combSig == "dm"))
+      mnSigFET <- c(mnSigFET,sum(lpsResults$combSig == "mean"))
+      bothSigFET <- c(bothSigFET,sum(lpsResults$combSig == "both"))
+      neitherSigFET <- c(neitherSigFET,sum(lpsResults$combSig == "neither"))
+      pvalFET <- c(pvalFET,lpsFETresults$p.value)
+      oddsFET <- c(oddsFET,lpsFETresults$estimate)
+      confLoFET <- c(confLoFET,lpsFETresults$conf.int[1])
+      confHiFET <- c(confHiFET,lpsFETresults$conf.int[2])
     }
   }
 }
+
+
+  sigGeneFETdf <- as.data.frame(cellClustFET)
+  
+  sigGeneFETdf$behaveVarFET <- behaveVarFET
+  sigGeneFETdf$treatCondFET <- treatCondFET
+  sigGeneFETdf$dmSigFET <- dmSigFET
+  sigGeneFETdf$mnSigFET <- mnSigFET
+  sigGeneFETdf$bothSigFET <- bothSigFET
+  sigGeneFETdf$neitherSigFET <- neitherSigFET
+  sigGeneFETdf$oddsFET <- oddsFET
+  sigGeneFETdf$confLoFET <- confLoFET
+  sigGeneFETdf$confHiFET <- confHiFET
+  sigGeneFETdf$pvalFET <- pvalFET
+  
+  write.table(x = sigGeneFETdf, file = paste0(workDir,"sigGenesFETDataFrame.txt"))
+
 
 ```
 just calculate the mean of R and R^2 of the betas

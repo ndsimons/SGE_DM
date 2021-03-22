@@ -260,16 +260,16 @@ if ( "betaHistDataFrame.txt" %in% plotFilesList ) {
   betaUpCount <- vector()
   betaDownCount <- vector()
   pvalNull <- vector()
-  pvalwBetas <- vector()
+  pvalweightBetas <- vector()
   
   for (cluster in clusterCellID$cluster) {
-  clusterDouble <- paste0(floor(cluster/10),cluster %% 10)
-  #agonism received results
-  assign(x = paste0("res_full_aggRec_DMpbRegGE_c",clusterDouble),
-         value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_agRec_emmreml")))
-  #groom
-  assign(x = paste0("res_full_groom_DMpbRegGE_c",clusterDouble),
-         value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_groom_emmreml")))
+    clusterDouble <- paste0(floor(cluster/10),cluster %% 10)
+    #agonism received results
+    assign(x = paste0("res_full_aggRec_DMpbRegGE_c",clusterDouble),
+           value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_agRec_emmreml")))
+    #groom
+    assign(x = paste0("res_full_groom_DMpbRegGE_c",clusterDouble),
+           value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_groom_emmreml")))
   }
 
   for (variable in c("aggRec","groom")) {
@@ -318,15 +318,18 @@ if ( "betaHistDataFrame.txt" %in% plotFilesList ) {
           #write to giant data frame
           #betas
           cellClust <- c(cellClust, rep(cluster, sum(posBetas, negBetas)))
-          
           behaveVar <- c(behaveVar, rep(variable, sum(posBetas, negBetas)))
-          
           treatCond <- c(treatCond, rep(treatment, sum(posBetas, negBetas)))
-          
           geneName <- c(geneName, rownames(get(paste0("plotEmrml",cluster,variable,treatment))))
-          
           betaVal <- c(betaVal, get(paste0("plotEmrml",cluster,variable,treatment))[,colNum])
-  
+          
+          #write binionial test results to vectors
+          cellClustBinom <- c(cellClustBinom,cluster)
+          behaveVarBinom <- c(behaveVarBinom,variable)
+          betaUpCount <- c(betaUpCount,posBetas)
+          betaDownCount <- c(betaDownCount,negBetas)
+          pvalNull <- c(pvalNull,signif(posBinomNull$p.value, digits = 3))
+          pvalweightBetas <- c(pvalweightBetas,signif(posBinomBkg$p.value, digits = 3))
           
         } else {
           rm(posBinomBkg)
@@ -360,6 +363,17 @@ if ( "betaHistDataFrame.txt" %in% plotFilesList ) {
   betaHistDF$betaVal <- betaVal
   
   write.table(x = betaHistDF, file = paste0(plotDataDir,"betaHistDataFrame.txt"))
+  
+  betaBinomPvalDF <- as.data.frame(cellClustBinom)
+  
+  betaBinomPvalDF$behaveVarBinom <- behaveVarBinom
+  betaBinomPvalDF$betaUpCount <- betaUpCount
+  betaBinomPvalDF$betaDownCount <- betaDownCount
+  betaBinomPvalDF$pvalNull <- pvalNull
+  betaBinomPvalDF$pvalweightBetas <- pvalweightBetas
+  
+  write.table(x = betaBinomPvalDF, file = paste0(plotDataDir,"betaBinomTestDataFrame.txt"))
+  
 }
 
 
@@ -498,7 +512,7 @@ for (b in c("agRec","groom")) {
   ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_",b,"_old.png"))
   
   
-  c$trtNum <- ifelse(c$treatment == "NULL", 2 * max(c$percent), 0)
+  c$trtNum <- ifelse(c$treatment == "NULL", max(c$percent), 0)
   
   ggplot() +
     geom_bar(data = c, aes(x = fdr10, y=paste0(celltype,"_",treatment), fill = trtNum),
@@ -508,10 +522,22 @@ for (b in c("agRec","groom")) {
     geom_text(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
     theme_minimal()
   
-    #scale_fill_manual(values = c(nullColor,lpsColor))
+  ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_colors_",b,".png"))
+
+  ggplot() +
+    geom_bar(data = c, aes(x = fdr10, y=paste0(celltype,"_",treatment), fill = trtNum,),
+                           stat="identity", width = .66, col = nullColor,
+                           position = position_dodge(width = 1)) + 
+    geom_tile(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), 
+                            fill = percent, width = max(fdr10)/9), col = nullColor) +
+    #scale_fill_viridis() +
+    scale_fill_gradient2(low = "#000000FF", high = nullColor) +
+    #geom_text(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
+    theme_minimal()
   
   
-  ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_",b,".png"))
+  
+  ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_purple_",b,".png"))
   
 }
 
@@ -571,110 +597,7 @@ ggsave(paste0(figDir,"6_mean_and_DM_v_groom__by_individual_c",cluster,".png"))
 ```
 
 ```{r slide 7 sig beta assymetry}
-cellClust <- vector()
-behaveVar <- vector()
-treatCond <- vector()
-geneName <- vector()
-betaVal <- vector()
 
-
-cellClustBinom <- vector()
-behaveVarBinom <- vector()
-betaUpCount <- vector()
-betaDownCount <- vector()
-pvalNull <- vector()
-pvalwBetas <- vector()
-
-
-
-for (variable in c("aggRec","groom")) {
-  #variable <- "aggRec"
-
-  for (cluster in c("00","14","02","05","06","07")) {
-    #cluster <- "00"
-    
-    emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
-    
-    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
-    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
-    
-    emrml$NCsig <- emrml[,20] < 0.10
-    emrml$LPSsig <- emrml[,21] < 0.10
-    
-    assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
-    assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
-    
-    NCposRatio <- mean(emrml$NCstdBeta > 0)
-    LPSposRatio <- mean(emrml$LPSstdBeta > 0)
-
-    for (treatment in c("NC","LPS")) {
-      #treatment <- "NC"
-      
-      if (treatment == "NC") {
-        colNum <- 22
-        betaPosRatio <- NCposRatio
-      } else {
-        colNum <- 23
-        betaPosRatio <- LPSposRatio
-      }
-      
-      posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
-      negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
-      
-      if (sum(posBetas,negBetas) > 0) {
-        #binomial test of 50-50 pos/neg betas
-        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
-        
-        #binomial test of pos/neg betas from exact distribution
-        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
-        
-        binomPval <- posBinomBkg$p.value
-        
-        #write to giant data frame
-        #betas
-        cellClust <- c(cellClust, rep(cluster, sum(posBetas, negBetas)))
-        
-        behaveVar <- c(behaveVar, rep(variable, sum(posBetas, negBetas)))
-        
-        treatCond <- c(treatCond, rep(treatment, sum(posBetas, negBetas)))
-        
-        geneName <- c(geneName, rownames(get(paste0("plotEmrml",cluster,variable,treatment))))
-        
-        betaVal <- c(betaVal, get(paste0("plotEmrml",cluster,variable,treatment))[,colNum])
-
-        
-      } else {
-        rm(posBinomBkg)
-        rm(posBinomNull)
-        binomPval <- NA
-      }
-      
-      ggplot() +
-        geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
-        ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
-                       dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
-        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
-        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
-        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
-                 size = 8, hjust = .25, vjust = .5) +
-        xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
-        xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
-      
-      ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
-      
-      
-    }
-  }
-}
-
-betaHistDF <- as.data.frame(cellClust)
-
-betaHistDF$cellClust <- as.character(betaHistDF$cellClust)
-
-betaHistDF$behaveVar <- behaveVar
-betaHistDF$treatCond <- treatCond
-betaHistDF$geneName <- geneName
-betaHistDF$betaVal <- betaVal
 
 
 betaHistAgRec <- subset(betaHistDF, behaveVar == "aggRec")

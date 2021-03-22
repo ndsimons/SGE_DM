@@ -35,19 +35,6 @@ cv2 <- apply(counts, 1, var)/means^2
 dm.stat <- DM(means, cv2)
 head(dm.stat)
 
-for (randGene in c(1,100,200,which(dm.stat == min(dm.stat)),which(dm.stat == max(dm.stat)))) {
-
-  ggplot() +
-    geom_point(aes(x = log10(means), y = log10(cv2)), alpha = .5) + 
-    geom_point(aes(x = log10(means[randGene]), y = log10(cv2[randGene])), size = 2, col = "red") +
-    geom_point(aes(x = log10(means), y = (med.trend)), col = "blue", size = .5) +
-    geom_segment(aes(x = log10(means[randGene]), y = log10(cv2[randGene]), 
-                     xend = log10(means[randGene]), yend = log10(cv2[randGene]) - dm.stat[randGene]), lwd = 1.1, col = "red") +
-    ggtitle("DM Manual Example (Random Data)")
-    
-  ggsave(paste0(figDir,"1_DM_testData_",randGene,".png"))
-}
-
 ```
 
 ```{r nitty gritty}
@@ -81,7 +68,8 @@ for (randGene in c(1,100,200,which(dm.stat == min(dm.stat)),which(dm.stat == max
     geom_point(aes(x = log10(means), y = (med.trend)), col = "blue", size = .5) +
     geom_segment(aes(x = log10(means[randGene]), y = log10(cv2[randGene]), 
                      xend = log10(means[randGene]), yend = log10(cv2[randGene]) - dm.stat[randGene]), lwd = 1.1, col = "red") +
-    ggtitle("DM Manual Example (Random Data)")
+    ggtitle("DM Manual Example (Random Data)") +
+    theme_minimal()
     
   ggsave(paste0(figDir,"1_DM_testData_",randGene,".png"))
 }
@@ -141,7 +129,8 @@ for (randGene in c(1,1000,2000,which(DMpbLocal == min(DMpbLocal)),which(DMpbLoca
     geom_point(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene])), size = 2, col = "red") +
     geom_segment(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene]), 
                        xend = log10(pbMean[randGene]), yend = log10(realCV2[randGene]) - DMpbLocal[randGene]), lwd = 1.1, col = "red") +
-  ggtitle("DM Manual Example (Real Data)")
+  ggtitle("DM Manual Example (Real Data)") +
+    theme_minimal()
     
   ggsave(paste0(figDir,"1_DM_realData_",randGene,".png"))
 }
@@ -201,7 +190,8 @@ for (randGene in c(30,1985,552,which(DMpbLocal == min(DMpbLocal)),which(DMpbLoca
     geom_point(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene])), size = 2, col = "red") +
     geom_segment(aes(x = log10(pbMean[randGene]), y = log10(realCV2[randGene]), 
                        xend = log10(pbMean[randGene]), yend = log10(realCV2[randGene]) - DMpbLocal[randGene]), lwd = 1.1, col = "red") +
-  ggtitle("DM Manual Example (Real Data)")
+  ggtitle("DM Manual Example (Real Data)") +
+    theme_minimal()
     
   ggsave(paste0(figDir,"1_DM_realData_filtered_",randGene,".png"))
 }
