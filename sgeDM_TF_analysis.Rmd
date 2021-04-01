@@ -199,11 +199,13 @@ Which TF-target links to use?
 
 ```{r}
 
-for (cluster in c("00","02")) {
-  for (treatment in c("LPS","NC")) {
+variable <- "aggRec"
+
+for (cluster in c("02","00")) {
+  for (treatment in c("NC","LPS")) {
       
-      cluster <- "00"
-      variable <- "aggRec"
+      cluster <- "02"
+      #variable <- "aggRec"
       treatment <- "LPS"
       
       if (variable == "aggRec") {
@@ -648,12 +650,15 @@ for (cluster in c("00","02")) {
           sampleBetas <- as.data.frame(rownames(DMPBemmreml))
           
           if ( treatment == "LPS" ) {
-            sampleBetas$Betas <- DMPBemmreml[,4]
+            sampleBetas$Betas <- DMPBemmreml[,4] / sqrt(DMPBemmreml[,10])
           } else {
-            sampleBetas$Betas <- DMPBemmreml[,3]
+            sampleBetas$Betas <- DMPBemmreml[,3] / sqrt(DMPBemmreml[,9])
           }
       
           colnames(sampleBetas) <- c("Gene","Betas")
+          
+          #### RESTRICT THE SET OF ALL GENES TO JUST ONES AFFILIATED WITH A TF
+          sampleBetas <- sampleBetas[sampleBetas$Gene %in% geneTFresults$target,]
           
           ## get gene.list
           gene.list <- sampleBetas$Gene
@@ -851,13 +856,14 @@ for (cluster in c("00","02")) {
                 ggplot() +
                   geom_linerange(aes(x = betasOnly$rank, ymax = betasOnly$betas, ymin = 0), 
                                  alpha = 66/dim(effect_size_matrix)[1]) +
-                  geom_linerange(aes(x = betasPathway$rank, ymax = betasPathway$betas, ymin = 0)) +
+                  geom_linerange(aes(x = betasPathway$rank, ymax = betasPathway$betas, ymin = 0), lwd = .15) +
                   xlab("Rank") + ggtitle(pathwayName, 
                                          subtitle = paste0(subset(GO_res, GO == pathwayName)$n_genes," genes, ",
                                                            "p = ",round(as.numeric(pValoutput), digits = 3),
                                                            " NES = ",round(as.numeric(NESoutput), digits = 3),
                                                            "    ",colnames(output$p_values)[r]))
-                ggsave(paste0(figDir,"gsea_stickPlot_c",cluster,"_",treatment,"_",pathwayName,".png"), width = 6, height = 4)
+                #ggsave(paste0(figDir,"gsea_stickPlot_c",cluster,"_",treatment,"_",pathwayName,".png"), width = 6, height = 4)
+                ggsave(paste0(figDir,"gsea_stickPlot_c",cluster,"_",treatment,"_",pathwayName,"_TFtargetSet.png"), width = 6, height = 4)
               }
             }
           }
@@ -929,7 +935,8 @@ for (cluster in c("00","02")) {
                 subtitle = paste0("Cluster ",cluster," ",treatment," Treatment")) +
         ylab("TF") + xlab("GSEA Enrichment Score - Increased DM")
       
-      ggsave(paste0(figDir,"GSEA_results_sigTFs_upVar_c",cluster,"_",variable,"_",treatment,".png"))
+      #ggsave(paste0(figDir,"GSEA_results_sigTFs_upVar_c",cluster,"_",variable,"_",treatment,".png"))
+      ggsave(paste0(figDir,"GSEA_results_sigTFs_upVar_c",cluster,"_",variable,"_",treatment,"_TFtargetSet.png"))
       
       
       ggplot(data = printOut[printOut$pathway %in% sigTFlist,]) +
@@ -938,7 +945,8 @@ for (cluster in c("00","02")) {
                 subtitle = paste0("Cluster ",cluster," ",treatment," Treatment")) +
         ylab("TF") + xlab("GSEA Enrichment Score - Decreased DM")
       
-      ggsave(paste0(figDir,"GSEA_results_sigTFs_downVar_c",cluster,"_",variable,"_",treatment,".png"))
+      #ggsave(paste0(figDir,"GSEA_results_sigTFs_downVar_c",cluster,"_",variable,"_",treatment,".png"))
+      ggsave(paste0(figDir,"GSEA_results_sigTFs_downVar_c",cluster,"_",variable,"_",treatment,"_TFtargetSet.png"))
       
       ggplot(data = sigPrint) +
         geom_point(aes(x = NES, y = pathway, col = pval < .05, size = nGenes)) +
@@ -946,11 +954,40 @@ for (cluster in c("00","02")) {
                 subtitle = paste0("Cluster ",cluster," ",treatment," Treatment")) +
         ylab("TF") + xlab("(lower DM)   GSEA Enrichment Score   (higher DM)")
       
-      ggsave(paste0(figDir,"GSEA_results_sigTFs_c",cluster,"_",variable,"_",treatment,".png"))
+      #ggsave(paste0(figDir,"GSEA_results_sigTFs_c",cluster,"_",variable,"_",treatment,".png"))
+      ggsave(paste0(figDir,"GSEA_results_sigTFs_c",cluster,"_",variable,"_",treatment,"_TFtargetSet.png"))
   }
 }
 
+```
 
+GSEA of c00 & LPS
+```{r}
+tf <- "CERS6"
+
+#check TF results
+subset(uniqTF, TF == tf)
+subset(weightMat.c00.aggRec.LPS, TF == tf)
+
+#which genes are significant
+subset(geneTFresults, TF == tf & sigDM)$target
+sigTargets <- subset(geneTFresults, TF == tf & sigDM)$target
+
+allTargets <- subset(geneTFresults, TF == tf)$target
+
+
+#check sample Beta data
+sampleBetas[,1:2]
+
+for (t in allTargets) {
+  print(res_full_aggRec_DMpbRegGE_c00[rownames(res_full_aggRec_DMpbRegGE_c00) == t,])
+}
+
+
+ggplot(res_full_aggRec_DMpbRegGE_c00) +
+  geom_point(aes(x = beta_trtLPS.aggRec_cent,
+                 y = beta_trtLPS.aggRec_cent / sqrt(sdev_trtLPS.aggRec_cent)),
+                 alpha = .1)
 ```
 
 

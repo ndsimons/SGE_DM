@@ -5,7 +5,7 @@ date: "3/10/2021"
 output: html_document
 ---
 
-```{r packages, include=FALSE}
+```{r setup, include=FALSE}
 library(ggplot2)
 library(limma)
 library(edgeR)
@@ -145,7 +145,7 @@ iters <- 10
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")) {
-  #cluster <- "14"
+  cluster <- "00"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
@@ -295,15 +295,15 @@ for (cluster in c("00","14","02","05","06","07")) {
     #data have been run on the cluster, just load the results
     
     #elo results
-    assign(x = paste0("res_full_DMpb_c",cluster),
+    assign(x = paste0("res_full_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_elo_emmreml")))
     
     #agRec
-    assign(x = paste0("res_full_aggRec_DMpb_c",cluster),
+    assign(x = paste0("res_full_aggRec_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_agRec_emmreml")))
     
     #groom
-    assign(x = paste0("res_full_groom_DMpb_c",cluster),
+    assign(x = paste0("res_full_groom_DMpbRegGE_c",cluster),
            value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_groom_emmreml")))
     
     #permutations
@@ -741,7 +741,7 @@ for (b in c("elo","agRec","groom")) {
                    modelName = paste0(b,"_model_c",c),
                    cluster = c,
                    behaveMetric = b,
-                   iters = 100)
+                   iters = 10)
   }
 }
 
@@ -2034,6 +2034,8 @@ pvals <- FALSE ## are data in pvalues or betas? If betas, set pvals to FALSE
 weight <- 1 ## Weight to place on betas. Typically either a 1 or a 0, where 0 weights all effects equally.
         ## weight=0 acts like a KS test, and is typically used with pvalues.
 
+dir.create(paste0(workDir,"figures/gsea"))
+
 for (cluster in clusterCellID$cluster) {
     
   #cluster <- "00"
@@ -2048,9 +2050,9 @@ for (cluster in clusterCellID$cluster) {
     sampleBetas <- as.data.frame(rownames(DMPBemmreml))
     
     if( lmVar == "trt") {
-      sampleBetas$Betas <- DMPBemmreml[,2]
+      sampleBetas$Betas <- DMPBemmreml[,2] / sqrt(DMPBemmreml[,8])
     } else {
-      sampleBetas$Betas <- DMPBemmreml[,3]
+      sampleBetas$Betas <- DMPBemmreml[,3] / sqrt(DMPBemmreml[,9])
     }
     
     colnames(sampleBetas) <- c("Gene","Betas")
@@ -2349,12 +2351,12 @@ for (cluster in clusterCellID$cluster) {
       sampleBetas <- as.data.frame(rownames(DMPBemmreml))
       
       if ( lmVar == "trt") {
-        sampleBetas$Betas <- DMPBemmreml[,2]
+        sampleBetas$Betas <- DMPBemmreml[,2] / sqrt(DMPBemmreml[,8])
       } else {
         if ( treatment == "LPS") {
-          sampleBetas$Betas <- DMPBemmreml[,4]
+          sampleBetas$Betas <- DMPBemmreml[,4] / sqrt(DMPBemmreml[,10])
         } else {
-          sampleBetas$Betas <- DMPBemmreml[,3]
+          sampleBetas$Betas <- DMPBemmreml[,3] / sqrt(DMPBemmreml[,9])
         }
       }
       
@@ -2894,7 +2896,7 @@ for (behavior in c("aggRec","groom")) {
       geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar))) +
       scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
       labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
-      ggtitle("Treatment GSEA Results",
+      ggtitle(paste0(treatment,":",behavior," GSEA Results"),
               subtitle = "Significant pathways only") + 
       theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
       theme(axis.text.y = element_text(size = 6))
@@ -2912,7 +2914,7 @@ for (behavior in c("aggRec","groom")) {
     geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar))) +
     scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
     labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
-    ggtitle("Treatment GSEA Results",
+    ggtitle(paste0(treatment,":",behavior," GSEA Results"),
             subtitle = "Significant in at least Two Cell Types") + 
     theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
     theme(axis.text.y = element_text(size = 6))
@@ -3178,7 +3180,7 @@ for (cluster in clusterCellID$cluster) {
       #if we're dealing with treatment use col 2, behavior col 3
       sampleBetas <- as.data.frame(rownames(DMPBemmreml))
       
-      sampleBetas$Betas <- DMPBemmreml[,22]
+      sampleBetas$Betas <- DMPBemmreml[,22] 
       
       
       colnames(sampleBetas) <- c("Gene","Betas")
@@ -3522,7 +3524,7 @@ for (behavior in c("agRec","groom")) {
       geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar))) +
       scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
       labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
-      ggtitle("Treatment GSEA Results",
+      ggtitle(paste0(treatment,":",behavior," GSEA Results"),
               subtitle = "Significant pathways only") + 
       theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
       theme(axis.text.y = element_text(size = 6))
@@ -3540,7 +3542,7 @@ for (behavior in c("agRec","groom")) {
     geom_point(aes(col = NES_sigVar, size = -log10(pval_sigVar))) +
     scale_color_gradientn(colors = c( "#FF246F","#BABABA", "#00DE13"), limits = c(-.85,.85)) +
     labs(size = "-log10(pval)", color = "NES\nGreen = Up Var\nRed = Down Var") +
-    ggtitle("Treatment GSEA Results",
+    ggtitle(paste0(treatment,":",behavior," GSEA Results"),
             subtitle = "Significant in at least Two Cell Types") + 
     theme(axis.text.x = element_text(angle = 45, vjust=0.9, hjust=1)) +
     theme(axis.text.y = element_text(size = 6))
@@ -3770,5 +3772,84 @@ sig_results<-get_significant_results(m,thresh=.01)
 #Or get # of significant conditions per gene. etc...
 barplot(table(get_n_significant_conditions(m,thresh=.01)),
         xlab="Number of species with LFSR<.01",ylab="Number of genes")
+```
+
+
+```{r plots for SGE}
+#comparing DM betas and mean betas
+cluster <- "14"
+variable <- "elo"
+
+paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
+                                     (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
+
+paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
+paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
+
+paulResults$NCsigMean <- paulResults[,28] < 0.10
+paulResults$LPSsigMean <- paulResults[,29] < 0.10
+
+if (variable == "elo") {
+  emrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
+} else {
+  emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
+}
+
+meanDMgeneList <-  intersect(rownames(paulResults),rownames(emrml))
+
+paulResults <- paulResults[rownames(paulResults) %in% meanDMgeneList,]
+emrml <- emrml[rownames(emrml) %in% meanDMgeneList,]
+
+
+emrml$NCstdBetaDM <- emrml[,3] / sqrt(emrml[,9])
+emrml$LPSstdBetaDM <- emrml[,4] / sqrt(emrml[,10])
+
+
+
+
+ncResults$combSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "both",
+                            ifelse(ncResults$NCsigDM, "dm",
+                                   ifelse(ncResults$NCsigMean, "mean", "neither")))
+
+lpsResults$combSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "both",
+                            ifelse(lpsResults$LPSsigDM, "dm",
+                                   ifelse(lpsResults$LPSsigMean, "mean", "neither")))
+
+ncResults$combSig <- factor(ncResults$combSig, levels = c("neither","mean","dm","both"))
+lpsResults$combSig <- factor(lpsResults$combSig, levels = c("neither","mean","dm","both"))
+
+ncResults$colorSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "#F8766D",
+                            ifelse(ncResults$NCsigDM, "#00BA38",
+                                   ifelse(ncResults$NCsigMean, "#619CFF", "#000000")))
+
+lpsResults$colorSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "#F8766D",
+                            ifelse(lpsResults$LPSsigDM, "#00BA38",
+                                   ifelse(lpsResults$LPSsigMean, "#619CFF", "#000000")))
+
+
+treatment <- "NC"
+
+ggplot(data = ncResults, aes(x = NCstdBetaMean, y = NCstdBetaDM)) +
+  geom_point(aes(col = colorSig), alpha = .5) +
+  geom_smooth(method = "lm") +
+  xlab(paste0("Mean std Betas ",treatment,":",variable)) + 
+  ylab(paste0("DM std Betas ",treatment,":",variable)) +
+  scale_color_manual(values = c("black",gg3col[3:1])) +
+  geom_text(aes(x = .9*min(NCstdBetaMean), y = .9*max(NCstdBetaDM), 
+                label = paste0("R=",round(cor(NCstdBetaMean,NCstdBetaDM),digits = 2),
+                               ", p=",signif(cor.test(NCstdBetaMean,NCstdBetaDM)$p.value,digits = 2))),
+            hjust = 0) +
+  theme(legend.position = "none") +
+  ggtitle(paste0("c",cluster," - ",treatment,":",variable), 
+          subtitle = paste0("mean:",sum(ncResults$NCsigMean),
+                            " DM:",sum(ncResults$NCsigDM),
+                            " Rsq=",round(cor(ncResults$NCstdBetaMean,ncResults$NCstdBetaDM)^2,digits = 4)))
+
+ggsave(paste0(figDir,"/stdBetas_DM_v_mean_",variable,"x",treatment,"_c",cluster,".png"))
+
+#compare DM-mean treatment betas for significant effects (FET)
+
+
+
 ```
 

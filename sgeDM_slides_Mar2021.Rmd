@@ -386,7 +386,7 @@ if ( "betaHistDataFrame.txt" %in% plotFilesList ) {
 ```{r slide 2 variance mean relationships}
 
 
-#ind <- 14
+ind <- 14
 
 varMean <- ggplot(data = rawDataDF, aes(x = mean, y = var)) +
   geom_point(alpha=0.5, col = varColor) +
@@ -476,7 +476,7 @@ nullColor <- scales::viridis_pal()(4)[1]
 lpsColor <- scales::viridis_pal()(4)[4]
 
 
-for (b in c("agRec","groom")) {
+for (b in c("elo","groom","agRec")) {
   #b <- "agRec"
   
   #NCfdr <- read.table(paste0(workDir,"data/",b,"ncFDRCounts.txt"))
@@ -512,15 +512,19 @@ for (b in c("agRec","groom")) {
   ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_",b,"_old.png"))
   
   
-  c$trtNum <- ifelse(c$treatment == "NULL", max(c$percent), 0)
+  #c$trtNum <- ifelse(c$treatment == "NULL", max(c$percent), 0)
+  c$trtNum <- ifelse(c$treatment == "NULL", 18, 0)
   
   ggplot() +
     geom_bar(data = c, aes(x = fdr10, y=paste0(celltype,"_",treatment), fill = trtNum),
              stat="identity", width = .66,
              position = position_dodge(width = 1)) + scale_fill_viridis() +
-    geom_tile(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), fill = percent), width = max(c$fdr10)/9) +
-    geom_text(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
-    theme_minimal()
+    #geom_tile(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), fill = percent), width = max(c$fdr10)/9) +
+    geom_tile(data = c, aes(x = -25, y = paste0(celltype,"_",treatment), fill = percent), width = 45) +
+    #geom_text(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
+    geom_text(data = c, aes(x = -25, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
+    theme_minimal() + theme(legend.position = "none") + xlim(c(-50,400)) +
+    xlab("Genes Passing FDR < 0.10") + ylab("")
   
   ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_colors_",b,".png"))
 
@@ -540,6 +544,33 @@ for (b in c("agRec","groom")) {
   ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_purple_",b,".png"))
   
 }
+
+
+allfdr <- read.csv(paste0(plotDataDir,"treatmentFDRcounts.txt"))
+
+allfdr <- allfdr[,c(4,6)]
+allfdr$celltype <- clusterCellID$cellID
+
+c <- allfdr
+
+c$percent <- 100 * c$fdr10 / c$nGenes
+c$percentLabel <- paste0(round(c$percent, digits = 2),"%")
+
+#c$trtNum <- ifelse(c$treatment == "NULL", max(c$percent), 0)
+#c$trtNum <- ifelse(c$treatment == "NULL", 18, 0)
+
+ggplot() +
+  geom_bar(data = c, aes(x = fdr10, y=celltype),
+           stat="identity", width = .66, fill = nullColor, alpha = .66,
+           position = position_dodge(width = 1)) + scale_fill_viridis() +
+  geom_tile(data = c, aes(x = -max(fdr10)/12, y=celltype, fill = percent), width = max(c$fdr10)/9) +
+  geom_text(data = c, aes(x = -max(fdr10)/12, y=celltype, label = percentLabel), col = "gray90", size = 3) +
+  geom_text(aes(x = -max(c$fdr10)/12, y=c$celltype[5], label = c$percentLabel[5]), col = "gray10", size = 3) +
+  theme_minimal() + theme(legend.position = "none") +
+  xlab("Genes Passing FDR < 0.10") + ylab("")
+
+ggsave(paste0(figDir,"5_fdr_sig_genes_by_cellType_colors_Treatment.png"))
+
 
 
 ```
@@ -598,17 +629,18 @@ ggsave(paste0(figDir,"6_mean_and_DM_v_groom__by_individual_c",cluster,".png"))
 
 ```{r slide 7 sig beta assymetry}
 
+betaHistDF$cellClustChar <- as.character(betaHistDF$cellClust)
 
 
 betaHistAgRec <- subset(betaHistDF, behaveVar == "aggRec")
 
-ggplot(betaHistAgRec, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClustChar, group = cellClustChar, color = cellClustChar, fill = cellClustChar)) +
   geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Agonisms Received")
 
 ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_density.png"))
 
-ggplot(betaHistAgRec, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClustChar, group = cellClustChar, color = cellClustChar, fill = cellClustChar)) +
   geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Agonisms Received")
 
@@ -617,13 +649,13 @@ ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_hist.png"))
 
 betaHistGroom <- subset(betaHistDF, behaveVar == "groom")
 
-ggplot(betaHistGroom, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClustChar, group = cellClustChar, color = cellClustChar, fill = cellClustChar)) +
   geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Overall Grooming")
 
 ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_density.png"))
 
-ggplot(betaHistGroom, aes(x = betaVal, y = cellClust, group = cellClust, color = cellClust, fill = cellClust)) +
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClustChar, group = cellClustChar, color = cellClustChar, fill = cellClustChar)) +
   geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
   ggtitle("Overall Grooming")
 
