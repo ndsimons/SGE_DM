@@ -16,6 +16,7 @@ library(glue)
 library(reshape2)
 
 library(tidyverse)
+library(paletteer)
 
 workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/DM_slides/"
 figDir <- paste0(workDir,"figures/")
@@ -741,13 +742,7 @@ behavPlot <- "aggRec"
 gtBehav <- pValplotTable %>%
   filter(behaveVarBinom == behavPlot) %>%
   select(-behaveVarBinom) %>%
-  gt() %>% 
-#  data_color(
-#    columns = pvalweightBetas,
-#    colors = scales::col_numeric(
-#      palette = c("white", "red"),
-#      domain = c(1, 0))
-#  ) %>%
+  gt()%>%
   tab_header(
     title = "Binomial Test Results - Agonisms Received",
     subtitle = glue::glue("Cell Clusters with Multiple Significant Genes")
@@ -756,15 +751,21 @@ gtBehav <- pValplotTable %>%
     treatCondBinom = "Treatment",
     cellClusterName = "Cell Type",
     betaDownCount = "- Beta",
-    betaUpCount = "+ Beta",
-    pvalweightBetas = "P-value"
-  )
+    #pvalweightBetas = "Pvalue",
+    betaUpCount = "+ Beta"
+  ) %>% 
+ data_color(
+   columns = pvalweightBetas,
+   colors = scales::col_numeric(
+     palette = c("white", "red"),
+     domain = c(1, 0))
+ )
 
 gtBehav
 
 gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_agRec.png"))
 
-behavPlot <- "groom"
+
 
 gtBehav <- pValplotTable %>%
   filter(behaveVarBinom == behavPlot) %>%
@@ -791,5 +792,87 @@ gtBehav <- pValplotTable %>%
 gtBehav
 
 gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_groom.png"))
+
+
+for (behavPlot in c("groom", "aggRec")) {
+  
+  if (behavPlot == "groom") {
+    titleText <- "Binomial Test Results - Overall Grooming"
+  } else {
+    titleText <- "Binomial Test Results - Agonisms Received"
+  }
+  
+  gtBehav <- pValplotTable %>%
+    filter(behaveVarBinom == behavPlot) %>%
+    select(-behaveVarBinom) %>%
+    gt()%>%
+    tab_header(
+      title = titleText,
+      subtitle = glue::glue("Cell Clusters with Multiple Significant Genes")
+    ) %>% 
+    cols_label(
+      treatCondBinom = "Treatment",
+      cellClusterName = "Cell Type",
+      betaDownCount = "- Beta",
+      pvalweightBetas = "P-value",
+      betaUpCount = "+ Beta"
+    ) %>% 
+    tab_style(
+      style = list(
+        cell_fill(color = "pink"),
+        cell_text(weight = "bold")
+        ),
+      locations = cells_body(
+        columns = 5,
+        rows = which(subset(pValplotTable, behaveVarBinom == behavPlot)$pvalweightBetas < .05)
+      )
+    ) %>% 
+    tab_style(
+      style = list(
+        cell_fill(color = "#FDE725"),
+        cell_text(weight = "bold")
+        ),
+      locations = cells_body(
+        columns = 1,
+        rows = which(subset(pValplotTable, behaveVarBinom == behavPlot)$cellClusterName == "NK")
+      )
+    ) %>% 
+    tab_style(
+      style = list(
+        cell_fill(color = "#35B779"),
+        cell_text(weight = "bold")
+        ),
+      locations = cells_body(
+        columns = 1,
+        rows = which(subset(pValplotTable, behaveVarBinom == behavPlot)$cellClusterName == "CD8")
+      )
+    ) %>% 
+    tab_style(
+      style = list(
+        cell_fill(color = "#31688E"),
+        cell_text(color = "white", weight = "bold")
+        ),
+      locations = cells_body(
+        columns = 1,
+        rows = which(subset(pValplotTable, behaveVarBinom == behavPlot)$cellClusterName == "CD4")
+      )
+    ) %>% 
+    tab_style(
+      style = list(
+        cell_fill(color = "#440154"),
+        cell_text(color = "white", weight = "bold")
+        ),
+      locations = cells_body(
+        columns = 1,
+        rows = which(subset(pValplotTable, behaveVarBinom == behavPlot)$cellClusterName == "CD14hi")
+      )
+    )
+  
+  gtBehav
+  
+  gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_",behavPlot,"_color.png"))
+}
+
+
 ```
 
