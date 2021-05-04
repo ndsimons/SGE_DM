@@ -11,6 +11,12 @@ library(cowplot)
 library(viridis)
 library(ggridges)
 
+library(gt)
+library(glue)
+library(reshape2)
+
+library(tidyverse)
+
 workDir <- "~/Dropbox (Personal)/scRNA/SGE_DM/DM_slides/"
 figDir <- paste0(workDir,"figures/")
 plotDataDir <- paste0(workDir,"plotData/")
@@ -477,7 +483,7 @@ lpsColor <- scales::viridis_pal()(4)[4]
 
 
 for (b in c("elo","groom","agRec")) {
-  #b <- "agRec"
+  b <- "agRec"
   
   #NCfdr <- read.table(paste0(workDir,"data/",b,"ncFDRCounts.txt"))
   #LPSfdr <- read.table(paste0(workDir,"data/",b,"TrtFDRCounts.txt"))
@@ -519,9 +525,7 @@ for (b in c("elo","groom","agRec")) {
     geom_bar(data = c, aes(x = fdr10, y=paste0(celltype,"_",treatment), fill = trtNum),
              stat="identity", width = .66,
              position = position_dodge(width = 1)) + scale_fill_viridis() +
-    #geom_tile(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), fill = percent), width = max(c$fdr10)/9) +
     geom_tile(data = c, aes(x = -25, y = paste0(celltype,"_",treatment), fill = percent), width = 45) +
-    #geom_text(data = c, aes(x = -max(fdr10)/12, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
     geom_text(data = c, aes(x = -25, y = paste0(celltype,"_",treatment), label = percentLabel), col = "gray90", size = 3) +
     theme_minimal() + theme(legend.position = "none") + xlim(c(-50,400)) +
     xlab("Genes Passing FDR < 0.10") + ylab("")
@@ -661,5 +665,131 @@ ggplot(betaHistGroom, aes(x = betaVal, y = cellClustChar, group = cellClustChar,
 
 ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_hist.png"))
 
+```
+
+```{r slide 7 beta assymetry cluster names}
+
+betaHistNames <- betaHistDF
+
+betaHistNames$cellClusterName <- ""
+
+betaHistNames$cellClusterName <- ifelse(betaHistNames$cellClustChar == "0", "CD8",
+                                   ifelse(betaHistNames$cellClustChar == "14", "CD4",
+                                          ifelse(betaHistNames$cellClustChar == "2", "NK",
+                                                 ifelse(betaHistNames$cellClustChar == "5", "Bcells", "CD14hi"))))
+
+
+betaHistAgRec <- subset(betaHistNames, behaveVar == "aggRec" & cellClusterName != "Bcells")
+
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClusterName, group = cellClusterName, color = cellClusterName, fill = cellClusterName)) +
+  geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ylab("") + xlab("Significant Beta Values, Cell-to-Cell Variance") + theme(legend.position = "none") +
+  ggtitle("Agonisms Received")
+
+ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_density_names.png"))
+
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClusterName, group = cellClusterName, color = cellClusterName, fill = cellClusterName)) +
+  geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ylab("") + xlab("Significant Beta Values, Cell-to-Cell Variance") + theme(legend.position = "none") +
+  ggtitle("Agonisms Received")
+
+ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_hist_names.png"))
+
+
+betaHistGroom <- subset(betaHistNames, behaveVar == "groom" & cellClusterName != "Bcells")
+
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClusterName, group = cellClusterName, color = cellClusterName, fill = cellClusterName)) +
+  geom_density_ridges(stat = "binline") + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ylab("") + xlab("Significant Beta Values, Cell-to-Cell Variance") + theme(legend.position = "none") +
+  ggtitle("Overall Grooming")
+
+ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_density_names.png"))
+
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClusterName, group = cellClusterName, color = cellClusterName, fill = cellClusterName)) +
+  geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ylab("") + xlab("Significant Beta Values, Cell-to-Cell Variance") + theme(legend.position = "none") +
+  ggtitle("Overall Grooming")
+
+ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_hist_names.png"))
+
+```
+
+```{r table 7 sig beta assymetry}
+#need table with:
+#cell cluster
+#positive betas
+#negative betas
+#treatment
+#pvalue
+betaBinomPvalDF <- read.table(paste0(plotDataDir,"betaBinomTestDataFrame.txt"))
+
+betaBinomPvalDF$cellClusterName <- ifelse(betaBinomPvalDF$cellClustBinom == 0, "CD8",
+                                       ifelse(betaBinomPvalDF$cellClustBinom == 14, "CD4",
+                                              ifelse(betaBinomPvalDF$cellClustBinom == 2, "NK",
+                                                     ifelse(betaBinomPvalDF$cellClustBinom == 5, "Bcells", "CD14hi"))))
+
+betaBinomPvalDF <- subset(betaBinomPvalDF, cellClustBinom != 5)
+
+pValplotTable <- betaBinomPvalDF[,c(2,8,3,5,4,7)]
+
+pValplotTable <- pValplotTable[order(pValplotTable$cellClusterName, decreasing = TRUE),]
+
+
+# Define the start and end dates for the data range
+behavPlot <- "aggRec"
+
+gtBehav <- pValplotTable %>%
+  filter(behaveVarBinom == behavPlot) %>%
+  select(-behaveVarBinom) %>%
+  gt() %>% 
+#  data_color(
+#    columns = pvalweightBetas,
+#    colors = scales::col_numeric(
+#      palette = c("white", "red"),
+#      domain = c(1, 0))
+#  ) %>%
+  tab_header(
+    title = "Binomial Test Results - Agonisms Received",
+    subtitle = glue::glue("Cell Clusters with Multiple Significant Genes")
+  ) %>% 
+  cols_label(
+    treatCondBinom = "Treatment",
+    cellClusterName = "Cell Type",
+    betaDownCount = "- Beta",
+    betaUpCount = "+ Beta",
+    pvalweightBetas = "P-value"
+  )
+
+gtBehav
+
+gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_agRec.png"))
+
+behavPlot <- "groom"
+
+gtBehav <- pValplotTable %>%
+  filter(behaveVarBinom == behavPlot) %>%
+  select(-behaveVarBinom) %>%
+  gt() %>% 
+#  data_color(
+#    columns = pvalweightBetas,
+#    colors = scales::col_numeric(
+#      palette = c("white", "red"),
+#      domain = c(1, 0))
+#  ) %>%
+  tab_header(
+    title = "Binomial Test Results - Agonisms Received",
+    subtitle = glue::glue("Cell Clusters with Multiple Significant Genes")
+  ) %>% 
+  cols_label(
+    treatCondBinom = "Treatment",
+    cellClusterName = "Cell Type",
+    betaDownCount = "- Beta",
+    betaUpCount = "+ Beta",
+    pvalweightBetas = "P-value"
+  )
+
+gtBehav
+
+gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_groom.png"))
 ```
 
