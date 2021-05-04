@@ -145,7 +145,8 @@ iters <- 10
 
 #only run cluster 7 as a test
 for (cluster in c("00","14","02","05","06","07")) {
-  cluster <- "00"
+  print(paste0("starting cluster ",cluster))
+  #cluster <- "00"
   
   sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
   sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
@@ -205,6 +206,7 @@ for (cluster in c("00","14","02","05","06","07")) {
   LPS_DMmeans <- rowMeans(sge_LPS_DMpbResid_matrix)
   NC_DMmeans <- rowMeans(sge_NC_DMpbResid_matrix)
   
+  print(paste0("taking residuals"))
   for (g in 1:dim(sge_LPS_DMpb_matrix)[1]) {
     tmpData <- as.data.frame(cbind(t(sge_NC_pbMean_matrix[g,]),t(sge_NC_DMpb_matrix[g,])))
     colnames(tmpData) <- c("mean","DM")
@@ -315,6 +317,8 @@ for (cluster in c("00","14","02","05","06","07")) {
       shufName <- str_replace(f, pattern = ".txt", replacement = "")
       assign(x = shufName,
              value = read.table(paste0(workDir,"cluster/permutations/",f), header = T))
+      
+      print(paste0("done with cluster ",cluster))
     }
     
   } else {
@@ -3783,11 +3787,9 @@ variable <- "elo"
 paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
                                      (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
 
-paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
-paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
 
-paulResults$NCsigMean <- paulResults[,28] < 0.10
-paulResults$LPSsigMean <- paulResults[,29] < 0.10
+
+paulResults$TRTstdBetaMean <- paulResults[,2] / sqrt(paulResults[,10])
 
 if (variable == "elo") {
   emrml <- get(paste0("res_full_DMpbRegGE_c",cluster))
@@ -3801,55 +3803,575 @@ paulResults <- paulResults[rownames(paulResults) %in% meanDMgeneList,]
 emrml <- emrml[rownames(emrml) %in% meanDMgeneList,]
 
 
-emrml$NCstdBetaDM <- emrml[,3] / sqrt(emrml[,9])
-emrml$LPSstdBetaDM <- emrml[,4] / sqrt(emrml[,10])
+emrml$TRTstdBetaDM <- emrml[,2] / sqrt(emrml[,8])
+
+dmpbDataNC <- as.data.frame(emrml[,22])
+colnames(dmpbDataNC) <- "TRTstdBetaDM"
+dmpbDataNC$gene <- rownames(emrml)
+    
+expDataNC <- as.data.frame(paulResults[,32])
+colnames(expDataNC) <- "TRTstdBetaMean"
+expDataNC$gene <- rownames(paulResults)
+    
+allResults <- merge(expDataNC, dmpbDataNC, by = "gene")
 
 
 
-
-ncResults$combSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "both",
-                            ifelse(ncResults$NCsigDM, "dm",
-                                   ifelse(ncResults$NCsigMean, "mean", "neither")))
-
-lpsResults$combSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "both",
-                            ifelse(lpsResults$LPSsigDM, "dm",
-                                   ifelse(lpsResults$LPSsigMean, "mean", "neither")))
-
-ncResults$combSig <- factor(ncResults$combSig, levels = c("neither","mean","dm","both"))
-lpsResults$combSig <- factor(lpsResults$combSig, levels = c("neither","mean","dm","both"))
-
-ncResults$colorSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "#F8766D",
-                            ifelse(ncResults$NCsigDM, "#00BA38",
-                                   ifelse(ncResults$NCsigMean, "#619CFF", "#000000")))
-
-lpsResults$colorSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "#F8766D",
-                            ifelse(lpsResults$LPSsigDM, "#00BA38",
-                                   ifelse(lpsResults$LPSsigMean, "#619CFF", "#000000")))
-
-
-treatment <- "NC"
-
-ggplot(data = ncResults, aes(x = NCstdBetaMean, y = NCstdBetaDM)) +
-  geom_point(aes(col = colorSig), alpha = .5) +
+ggplot(data = allResults, aes(x = TRTstdBetaMean, y = TRTstdBetaDM)) +
+  geom_point(alpha = .5) +
   geom_smooth(method = "lm") +
-  xlab(paste0("Mean std Betas ",treatment,":",variable)) + 
-  ylab(paste0("DM std Betas ",treatment,":",variable)) +
+  xlab(paste0("Mean std Treatment Betas")) + 
+  ylab(paste0("DM std Treatment Betas")) +
   scale_color_manual(values = c("black",gg3col[3:1])) +
-  geom_text(aes(x = .9*min(NCstdBetaMean), y = .9*max(NCstdBetaDM), 
-                label = paste0("R=",round(cor(NCstdBetaMean,NCstdBetaDM),digits = 2),
-                               ", p=",signif(cor.test(NCstdBetaMean,NCstdBetaDM)$p.value,digits = 2))),
+  geom_text(aes(x = .9*min(TRTstdBetaMean), y = .9*max(TRTstdBetaDM), 
+                label = paste0("R=",round(cor(TRTstdBetaMean,TRTstdBetaDM),digits = 3),
+                               ", p=",signif(cor.test(TRTstdBetaMean,TRTstdBetaDM)$p.value,digits = 2))),
             hjust = 0) +
   theme(legend.position = "none") +
-  ggtitle(paste0("c",cluster," - ",treatment,":",variable), 
-          subtitle = paste0("mean:",sum(ncResults$NCsigMean),
-                            " DM:",sum(ncResults$NCsigDM),
-                            " Rsq=",round(cor(ncResults$NCstdBetaMean,ncResults$NCstdBetaDM)^2,digits = 4)))
+  ggtitle(paste0("c",cluster," - Treatment"))
 
-ggsave(paste0(figDir,"/stdBetas_DM_v_mean_",variable,"x",treatment,"_c",cluster,".png"))
+ggsave(paste0(figDir,"/stdBetas_DM_v_mean_Treatment_c",cluster,".png"))
+
+focalGene <- "PIM2"
+
+ggplot(data = allResults, aes(x = TRTstdBetaMean, y = TRTstdBetaDM)) +
+  geom_point(alpha = .5) +
+  geom_point(data = subset(allResults, gene == focalGene), aes(x = TRTstdBetaMean, y = TRTstdBetaDM), col = "red", size = 5, alpha = 3/4) +
+  geom_smooth(method = "lm") +
+  xlab(paste0("Mean std Treatment Betas")) + 
+  ylab(paste0("DM std Treatment Betas")) +
+  scale_color_manual(values = c("black",gg3col[3:1])) +
+  geom_text(aes(x = .9*min(TRTstdBetaMean), y = .9*max(TRTstdBetaDM), 
+                label = paste0("R=",round(cor(TRTstdBetaMean,TRTstdBetaDM),digits = 3),
+                               ", p=",signif(cor.test(TRTstdBetaMean,TRTstdBetaDM)$p.value,digits = 2))),
+            hjust = 0) +
+  theme(legend.position = "none") +
+  ggtitle(paste0("c",cluster," - Treatment"))
+
+ggsave(paste0(figDir,"/stdBetas_DM_v_mean_Treatment_c",cluster,"_",focalGene,".png"))
 
 #compare DM-mean treatment betas for significant effects (FET)
 
 
+
+```
+
+SGE follow up (from April 1 meeting)
+1) what are the mean betas of the genes that are significantly correlated with high var - high stress?
+
+```{r followup 1}
+for (variable in c("aggRec","groom")) {
+  #variable <- "aggRec"
+
+  for (cluster in c("00","14","02","05","06","07")) {
+    #cluster <- "02"
+    
+    emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
+    
+    paulResults <- readRDS(clusterCellID[(which(clusterCellID$cluster == cluster)),
+                                         (which(colnames(clusterCellID) == paste0(variable,"Betas")))])
+    
+    paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
+    paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
+    
+    paulResults <- paulResults[rownames(paulResults) %in% rownames(emrml),]
+    
+    emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+    emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
+    
+    emrml$NCsig <- emrml[,20] < 0.10
+    emrml$LPSsig <- emrml[,21] < 0.10
+    
+    assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
+    assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+    
+    NCposRatio <- mean(emrml$NCstdBeta > 0)
+    LPSposRatio <- mean(emrml$LPSstdBeta > 0)
+    
+    NCposRatioMeans <- mean(paulResults$NCstdBetaMean > 0)
+    LPSposRatioMeans <- mean(paulResults$LPSstdBetaMean > 0)
+    
+    #get the same genes from the mean data
+    ncGenes <- rownames(get(paste0("plotEmrml",cluster,variable,"NC")))
+    lpsGenes <- rownames(get(paste0("plotEmrml",cluster,variable,"LPS")))
+    
+    meanNC <- paulResults[rownames(paulResults) %in% ncGenes,]
+    meanLPS <- paulResults[rownames(paulResults) %in% lpsGenes,]
+
+    for (treatment in c("NC","LPS")) {
+      #treatment <- "NC"
+      
+      if (treatment == "NC") {
+        colNum <- 22
+        meanColNum <- 32
+        betaPosRatio <- NCposRatio
+        betaPosRatioMean <- NCposRatioMeans
+      } else {
+        colNum <- 23
+        meanColNum <- 33
+        betaPosRatio <- LPSposRatio
+        betaPosRatioMean <- LPSposRatioMeans
+      }
+      
+      posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
+      negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
+      
+      posMeanBetas <- sum(get(paste0("mean",treatment))[,meanColNum] > 0)
+      negMeanBetas <- sum(get(paste0("mean",treatment))[,meanColNum] < 0)
+      
+      if (sum(posBetas,negBetas) > 0) {
+        #binomial test of 50-50 pos/neg betas
+        posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
+        
+        binomPval <- posBinomBkg$p.value
+        
+        ### for Means
+        #binomial test of 50-50 pos/neg betas
+        posBinomNullMean <- binom.test(posMeanBetas, sum(posMeanBetas,negMeanBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkgMean <- binom.test(posMeanBetas, sum(posMeanBetas,negMeanBetas), p = betaPosRatioMean)
+        
+        binomPvalMean <- posBinomBkgMean$p.value
+        
+        
+        
+      } else {
+        rm(posBinomBkg)
+        rm(posBinomBkgMean)
+        rm(posBinomNull)
+        rm(posBinomNullMean)
+        binomPval <- NA
+        binomPvalMean <- NA
+      }
+      
+      ggplot() +
+        geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
+        ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
+                       dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
+        annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
+                 size = 8, hjust = .25, vjust = .5) +
+        xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
+        xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
+      
+      ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
+      
+      
+      ggplot() +
+        geom_histogram(aes(x = get(paste0("mean",treatment))[,meanColNum]), bins = 50) +
+        ggtitle(paste0("Mean Betas ",treatment,":",variable," - c",cluster," - ",
+                       dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
+        annotate(geom = "text", x = Inf, y = -Inf, label = posMeanBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = -Inf, y = -Inf, label = negMeanBetas, size = 8, hjust = "inward", vjust = "inward") +
+        annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPvalMean, digits = 2)), 
+                 size = 8, hjust = .25, vjust = .5) +
+        xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
+        xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
+      
+      ggsave(paste0(figDir,"/sigMeanBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
+
+      
+    }
+  }
+}
+
+
+```
+
+2) in the permutation runs, do the DM betas show a high var - high stress directionality?
+a) the same genes that are sig in the regular data
+b) the genes that are sig in that permutation (matched number of genes, listed by pvalue)
+```{r followup 2}
+clusterList <- c("00","14","02","05","06","07")
+
+cluster <- clusterList[1]
+#treatment <- "LPS"
+behavior <- "aggRec"
+fdrThresh <- 0.10
+
+permModel <- vector()
+permTrt <- vector()
+permCluster <- vector()
+permNsig <- vector()
+permSigBetaPos <- vector()
+permSigBetaTot <- vector()
+permBetaPos <- vector()
+permBetaTot <- vector()
+
+
+
+#get significant genes
+
+### didn't save the beta values from the permuted runs... so i need to re-permute them here
+
+#number of permutations
+iters <- 10
+
+#only run cluster 7 as a test
+for (cluster in clusterList) {
+  
+  #cluster <- "07"
+  print(paste0("starting cluster ",cluster))
+  
+  
+  sge_LPS_pbMean_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_pbMean_matrix"))
+  sge_LPS_DMpb_matrix <- read.table(paste0(workDir,"data/sge_LPS_c",cluster,"_DMpb_matrix"))
+  
+  sge_NC_pbMean_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_pbMean_matrix"))
+  sge_NC_DMpb_matrix <- read.table(paste0(workDir,"data/sge_NC_c",cluster,"_DMpb_matrix"))
+  
+  ## remove genes w/NAas DM values for any individuals, from NC & LPS DM
+  numberNAs <- vector()
+  
+  for (r in 1:dim(sge_NC_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_NC_DMpb_matrix[r,]))
+  }
+  sge_NC_DMpb_matrix <- sge_NC_DMpb_matrix[numberNAs < 1,]
+  
+  numberNAs <- vector()
+  for (r in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+    numberNAs[r] <- sum(is.na(sge_LPS_DMpb_matrix[r,]))
+  }
+  sge_LPS_DMpb_matrix <- sge_LPS_DMpb_matrix[numberNAs < 1,]
+  
+  
+  ## only use common set of genes - must exist in all matrices (8)
+  geneList <- rownames(table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))))[table(c(rownames(sge_NC_pbMean_matrix),
+              rownames(sge_NC_DMpb_matrix),
+              rownames(sge_LPS_pbMean_matrix),
+              rownames(sge_LPS_DMpb_matrix))) == 4]
+  
+  geneList <- geneList[geneList != "chrMT"]
+
+  #for any objects that start sge_NC or sge_LP, cut down their gene list and replace 77_06 with Mo
+  
+  for (fObj in apropos("^sge_[NL][CP]")) {
+    tmpObj <- get(fObj)
+    ## subset mean and variance data frames to include only the genes present in the DM data frame ##
+    tmpObj <- subset(tmpObj, rownames(tmpObj) %in% geneList)
+    
+    ## fix MO - 77_06 ID
+    if (sum(colnames(tmpObj) == "X77_06") > 0) {
+      colnames(tmpObj)[which(colnames(tmpObj) == "X77_06")] <- "Mo"
+    }
+    #sort the columns by ID to match metadata
+    tmpObj <- tmpObj[,order(colnames(tmpObj))]
+    
+    #reassign the temp object to the sge_NC, etc
+    assign(x = fObj, value = tmpObj)
+  }
+  
+  ### Regress mean out of EVERY GENE
+  sge_LPS_DMpbResid_matrix <- sge_LPS_DMpb_matrix
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpb_matrix
+  
+  #measure the means, so i can correct for the differences in the mean in the residuals
+  LPS_DMmeans <- rowMeans(sge_LPS_DMpbResid_matrix)
+  NC_DMmeans <- rowMeans(sge_NC_DMpbResid_matrix)
+  
+  print(paste0("taking residuals"))
+  for (g in 1:dim(sge_LPS_DMpb_matrix)[1]) {
+    tmpData <- as.data.frame(cbind(t(sge_NC_pbMean_matrix[g,]),t(sge_NC_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_NC_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+    
+    tmpData <- as.data.frame(cbind(t(sge_LPS_pbMean_matrix[g,]),t(sge_LPS_DMpb_matrix[g,])))
+    colnames(tmpData) <- c("mean","DM")
+    sge_LPS_DMpbResid_matrix[g,] <- lm(tmpData$DM ~ tmpData$mean)$residuals
+  }
+  
+  #add the average DM for NC and LPS back in
+  sge_LPS_DMpbResid_matrix <- sge_LPS_DMpbResid_matrix + LPS_DMmeans
+  sge_NC_DMpbResid_matrix <- sge_NC_DMpbResid_matrix + NC_DMmeans
+  
+  ## generate a dataframe of NC and LPS combined ##
+  sge_pbMean_matrix_nested <- merge(sge_NC_pbMean_matrix,sge_LPS_pbMean_matrix, by=0)
+  rownames(sge_pbMean_matrix_nested) <- sge_pbMean_matrix_nested$Row.names
+  sge_pbMean_matrix_nested$Row.names <- NULL
+  
+  #and raw means and variances to use in the variance model
+  sge_DMpb_matrix_nested <- merge(sge_NC_DMpb_matrix,sge_LPS_DMpb_matrix, by=0)
+  rownames(sge_DMpb_matrix_nested) <- sge_DMpb_matrix_nested$Row.names
+  sge_DMpb_matrix_nested$Row.names <- NULL
+  
+  #and raw means and variances and residuals
+  sge_DMpbResid_matrix_nested <- merge(sge_NC_DMpbResid_matrix,sge_LPS_DMpbResid_matrix, by=0)
+  rownames(sge_DMpbResid_matrix_nested) <- sge_DMpbResid_matrix_nested$Row.names
+  sge_DMpbResid_matrix_nested$Row.names <- NULL
+
+  indIDs <- colnames(sge_NC_DMpb_matrix)
+
+  #pick metadata based on samples in the matrix
+  ## get some metadata ##
+  metadata <- read.table(paste0(workDir,"data/sge_metadata_matrix"), header = T) 
+  # this file is also in SGE_DM/dataFiles
+  metadata[1,1] <- 'Mo'
+  metadata <- metadata[order(metadata$ID),]
+  metadata <- metadata[metadata$ID %in% indIDs,]
+  
+  ## make sure metadata order matches data frames ##
+  all.equal(metadata$ID,colnames(sge_NC_DMpb_matrix))
+  
+  ## double the metadata so it includes both NC and LPS ##
+  metadata <- rbind(metadata,metadata)
+  metadata$trt <- rep(c('NC','LPS'), times=c(length(indIDs),length(indIDs)))
+  
+  ## run a nested model with trt, and age and <behavior metric> nested within trt ##
+  ## elo and age have to be mean centered for nested model ##
+  metadata$elo_centered <- scale(metadata$elo, center = T, scale = F)
+  #metadata$elo_centered <- metadata$elo - mean(metadata$elo)
+  metadata$age_centered <- scale(metadata$age, center = T, scale = F)
+  #metadata$age_centered <- metadata$age - mean(metadata$age)
+  
+  behaveData <- read.table(paste0(workDir,"data/SGEII_METADATA_MASTER.txt"), header = T)
+  
+  #phase 1 only
+  behaveData <- subset(behaveData, phase == 1)
+  
+  #animals we need data for
+  # behave data is 2 character upper, genomic data is 4 char upper/lower
+  needIDs <- to_any_case(unique(substr(metadata$ID, start = 1, stop  = 2)), case = "screaming_snake")
+  
+  #limit behavioral data to correct 45 individs
+  behaveData <- subset(behaveData, ID %in% needIDs)
+  
+  #sort by ID
+  behaveData <- behaveData[order(behaveData$ID),]
+  
+  #match size of metadata object, repeats for NC & LPS
+  behaveData <- rbind(behaveData,behaveData)
+  
+  #get the important variables, centered
+  metadata$aggAsymm_cent <- behaveData$gc.agg.Diff
+  metadata$aggRec_cent <- behaveData$gc.overall.agg.rec
+  metadata$groom_cent <- behaveData$gc.overall.groom
+  
+  #flip factors in metadata
+  metadata$trt <- factor(metadata$trt, levels = c("NC","LPS"))
+  
+  #agRec
+  assign(x = paste0("res_full_aggRec_DMpbRegGE_c",cluster),
+         value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_agRec_emmreml")))
+    
+  #groom
+  assign(x = paste0("res_full_groom_DMpbRegGE_c",cluster),
+         value = read.table(paste0(workDir,"cluster/results/results_c",cluster,"_groom_emmreml")))
+  
+  
+  #need to run the loop locally
+  
+    if ( iters > 0 ) {
+    ## Permutations for emprirical null ##
+    ################################################################################################################################
+    ## Run iters iterations of the model after permutting Elo ratings to retrieve an empiric distribution of p-values for rank effects
+    ################################################################################################################################
+    
+    #go through each of the 3 models (elo, agRec, groom) and generate a null
+    for (model in c("groom","agRec")) {
+      #model <- "agRec"
+      modelName <- str_replace(model,"ag","agg")
+      
+        emrmlRes <- get(paste0("res_full_",modelName,"_DMpbRegGE_c",cluster))
+
+        LPSsigGenes <- rownames(emrmlRes)[emrmlRes[,21] < .1]
+        NCsigGenes <- rownames(emrmlRes)[emrmlRes[,20] < .1]
+    
+      #generate N sets of pvalues
+      for(iter in 1:iters) {
+        #iter <- 1
+        
+        #randomize treatment
+        #first for the NC samples
+        metaRandTrt <- subset(metadata, trt == "NC")
+        #pick from a list of 50:50 NC:LPS
+        metaRandTrt$trt <- sample(metadata$trt)[1:length(metaRandTrt$trt)]
+        
+        #duplicate the data, but flip the NC/LPS
+        metaRandLPS <- metaRandTrt
+        metaRandLPS$trt <- ifelse(metaRandLPS$trt == "NC", "LPS", "NC")
+        
+        metaRandTrt <- rbind(metaRandTrt,metaRandLPS)
+  
+        #randomize behavioral variable
+        if ( model == "elo" ) {
+          varCol <- 6
+        } else if ( model == "agRec" ) {
+          varCol <- 9
+        } else {
+          varCol <- 10
+        }
+        
+        #Step 1 - pull out just the NC condition
+        metaRandVar <- subset(metadata, trt == "NC")
+        
+        #Step 2 - randomize behavoral variable
+        metaRandVar[,varCol] <- sample(metaRandVar[,varCol])
+        
+        #Step 3 - create the "LPS" metadata, e.g. the second half of the metadata table
+        #by repeating the table, but assigning the opposite treatment
+        metaRandLPS <- metaRandVar
+        metaRandLPS$trt <- "LPS"
+        
+        #Step 4 - bring them back together for a single metaRand object
+        metaRandVar <- rbind(metaRandVar,metaRandLPS)
+        
+        ###### Fit an elo model for each gene using emmreml to DM pseudobulk
+        if ( model == "elo") {
+          designVar <- model.matrix(~trt + trt:elo_centered + trt:age_centered, data=metaRandVar)
+          designTrt <- model.matrix(~trt + trt:elo_centered + trt:age_centered, data=metaRandTrt)
+        } else if ( model == "agRec" ) {
+          designVar <- model.matrix(~trt + trt:aggRec_cent + trt:age_centered, data=metaRandVar)
+          designTrt <- model.matrix(~trt + trt:aggRec_cent + trt:age_centered, data=metaRandTrt)
+        } else {
+          designVar <- model.matrix(~trt + trt:groom_cent + trt:age_centered, data=metaRandVar)
+          designTrt <- model.matrix(~trt + trt:groom_cent + trt:age_centered, data=metaRandTrt)
+        }
+
+        ### Behavioral Variable Model        
+        
+        ## regress out group effects from DMpb_residuals ##
+        design <- model.matrix(~metadata$group)
+        fit <-lmFit(sge_DMpbResid_matrix_nested,design)
+        intercepts=data.frame(eBayes(fit))[,1]
+        resid_DMpb=apply(residuals.MArrayLM(object=fit, sge_DMpbResid_matrix_nested),2,function(x){x+intercepts})
+        
+        #Declare object res_null to store in it the model results: beta coefficients, standard deviations and p values
+        res_null=resid_DMpb[,1:(3*ncol(designVar))]
+        colnames(res_null)[1:ncol(designVar)]=paste0("beta_",colnames(designVar))
+        colnames(res_null)[(ncol(designVar)+1):(2*ncol(designVar))]=paste0("sdev_",colnames(designVar))
+        colnames(res_null)[((2*ncol(designVar))+1):(3*ncol(designVar))]=paste0("p_value_",colnames(designVar))
+        
+        #Declare object random_effects to store in it the individual-wise u random effects
+        random_effects=resid_DMpb[,1:length(indIDs)]
+        colnames(random_effects)=metadata[1:length(indIDs),'ID']
+        
+        #Define matrix Z describing the sample-to-individual mapping
+        K <- read.table(paste0(workDir,"data/SGE2kinshipmatrix.txt"))
+        # correcting capitalization so it matches
+        rownames(K)[34] <- 'JE11'
+        colnames(K)[34] <- 'JE11'
+        K=K[unique(metadata$ID),unique(metadata$ID)]
+        
+        Z=matrix(rep(0,nrow(metadata)*ncol(K)),nrow=nrow(metadata),ncol=ncol(K))
+        rownames(Z)=metadata$ID
+        colnames(Z)=colnames(K)
+        for(i in 1:ncol(Z)){
+          set=which(metadata$ID == colnames(Z)[i])
+          Z[set,i]=1
+        }
+        
+        #Fit a model for each gene using emmreml
+        for(i in 1:nrow(resid_DMpb)) {
+          emma=emmreml(y=resid_DMpb[i,],X=designVar,Z=as.matrix(Z),K=as.matrix(K),varbetahat=T,varuhat=T,PEVuhat=T,test=T)
+          random_effects[i,]=t(emma$uhat)
+          res_null[i,]=t(c(emma$betahat,emma$varbetahat,emma$pvalbeta[,"none"]))
+        }
+          
+        #we register betas of the behavior at NC and at LPS alone.
+        if( iter == 1 ) {
+          shuffled_behave_betas_NC <- data.frame(x=res_null[,3])
+          shuffled_behave_betas_LPS <- data.frame(x=res_null[,4])
+          rownames(shuffled_behave_betas_NC) <- rownames(res_null)
+          rownames(shuffled_behave_betas_LPS) <- rownames(res_null)
+        } else {
+          shuffled_behave_betas_NC <- cbind(shuffled_behave_betas_NC,x=res_null[,3])
+          shuffled_behave_betas_LPS <- cbind(shuffled_behave_betas_LPS,x=res_null[,4])
+        }
+      }
+      
+      print(date())
+      print(paste0("finished ",model," model permutations"))
+      
+      print(model)
+      print("LPS")
+      print("sig genes, permutated beta > 0")
+      print(sum(unlist(shuffled_behave_betas_LPS[rownames(shuffled_behave_betas_LPS) %in% LPSsigGenes,]) > 0))
+      print("sig genes, total permutated betas")
+      print(length(unlist(shuffled_behave_betas_LPS[rownames(shuffled_behave_betas_LPS) %in% LPSsigGenes,])))
+      
+      print("all genes, permutated beta > 0")
+      print(sum(unlist(shuffled_behave_betas_LPS) > 0))
+      print("all genes, total permutated betas")
+      print(length(unlist(shuffled_behave_betas_LPS)))
+      
+      permModel <- c(permModel,model)
+      permTrt <- c(permTrt,"LPS")
+      permCluster <- c(permCluster,cluster)
+      permNsig <- c(permNsig,length(LPSsigGenes))
+      permSigBetaPos <- c(permSigBetaPos,sum(unlist(shuffled_behave_betas_LPS[rownames(shuffled_behave_betas_LPS) %in% LPSsigGenes,]) > 0))
+      permSigBetaTot <- c(permSigBetaTot,length(unlist(shuffled_behave_betas_LPS[rownames(shuffled_behave_betas_LPS) %in% LPSsigGenes,])))
+      permBetaPos <- c(permBetaPos,sum(unlist(shuffled_behave_betas_LPS) > 0))
+      permBetaTot <- c(permBetaTot,length(unlist(shuffled_behave_betas_LPS)))
+
+      
+      print(model)      
+      print("NC")
+      print("sig genes, permutated beta > 0")
+      print(sum(unlist(shuffled_behave_betas_NC[rownames(shuffled_behave_betas_NC) %in% NCsigGenes,]) > 0))
+      print("sig genes, total permutated betas")
+      print(length(unlist(shuffled_behave_betas_NC[rownames(shuffled_behave_betas_NC) %in% NCsigGenes,])))
+
+      print("all genes, permutated beta > 0")
+      print(sum(unlist(shuffled_behave_betas_NC) > 0))
+      print("all genes, total permutated betas")
+      print(length(unlist(shuffled_behave_betas_NC)))
+      
+      
+      permModel <- c(permModel,model)
+      permTrt <- c(permTrt,"NC")
+      permCluster <- c(permCluster,cluster)
+      permNsig <- c(permNsig,length(NCsigGenes))
+      permSigBetaPos <- c(permSigBetaPos,sum(unlist(shuffled_behave_betas_NC[rownames(shuffled_behave_betas_NC) %in% NCsigGenes,]) > 0))
+      permSigBetaTot <- c(permSigBetaTot,length(unlist(shuffled_behave_betas_NC[rownames(shuffled_behave_betas_NC) %in% NCsigGenes,])))
+      permBetaPos <- c(permBetaPos,sum(unlist(shuffled_behave_betas_NC) > 0))
+      permBetaTot <- c(permBetaTot,length(unlist(shuffled_behave_betas_NC)))
+
+    }
+      
+  }
+    
+}
+  
+permutationBetas <- as.data.frame(cbind(permModel,permTrt,permCluster,permNsig,permSigBetaPos,permSigBetaTot,permBetaPos,permBetaTot))
+
+write.table(permutationBetas, paste0(workDir,"permutationBetas.txt"))
+
+permutationBetas$permNsig <- as.numeric(permutationBetas$permNsig)
+permutationBetas$permSigBetaPos <- as.numeric(permutationBetas$permSigBetaPos)
+permutationBetas$permSigBetaTot <- as.numeric(permutationBetas$permSigBetaTot)
+permutationBetas$permBetaPos <- as.numeric(permutationBetas$permBetaPos)
+permutationBetas$permBetaTot <- as.numeric(permutationBetas$permBetaTot)
+
+permutationBetas$permSigBetaProp <- permutationBetas$permSigBetaPos / permutationBetas$permSigBetaTot
+permutationBetas$permBetaProp <- permutationBetas$permBetaPos / permutationBetas$permBetaTot
+permutationBetas$flatBinomP <- NA
+permutationBetas$adjBinomP <- NA
+
+for (n in 1:dim(permutationBetas)[1]) {
+  
+  if (permutationBetas$permSigBetaTot[n] > 0) {
+    #binomial test of permutation data
+    bTest <- binom.test(x = permutationBetas$permSigBetaPos[n], n = permutationBetas$permSigBetaTot[n], 
+               p = permutationBetas$permBetaPos[n] / permutationBetas$permBetaTot[n])
+    permutationBetas$adjBinomP[n] <- bTest$p.value
+    
+    bTest <- binom.test(x = permutationBetas$permSigBetaPos[n], n = permutationBetas$permSigBetaTot[n], 
+               p = .5)
+    permutationBetas$flatBinomP[n] <- bTest$p.value
+    
+    
+  }
+}
+
+write.table(permutationBetas, paste0(workDir,"permutationBetas_wBinom.txt"))
 
 ```
 
