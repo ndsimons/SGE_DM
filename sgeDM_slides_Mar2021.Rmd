@@ -737,61 +737,6 @@ pValplotTable <- pValplotTable[order(pValplotTable$cellClusterName, decreasing =
 
 
 # Define the start and end dates for the data range
-behavPlot <- "aggRec"
-
-gtBehav <- pValplotTable %>%
-  filter(behaveVarBinom == behavPlot) %>%
-  select(-behaveVarBinom) %>%
-  gt()%>%
-  tab_header(
-    title = "Binomial Test Results - Agonisms Received",
-    subtitle = glue::glue("Cell Clusters with Multiple Significant Genes")
-  ) %>% 
-  cols_label(
-    treatCondBinom = "Treatment",
-    cellClusterName = "Cell Type",
-    betaDownCount = "- Beta",
-    #pvalweightBetas = "Pvalue",
-    betaUpCount = "+ Beta"
-  ) %>% 
- data_color(
-   columns = pvalweightBetas,
-   colors = scales::col_numeric(
-     palette = c("white", "red"),
-     domain = c(1, 0))
- )
-
-gtBehav
-
-gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_agRec.png"))
-
-
-
-gtBehav <- pValplotTable %>%
-  filter(behaveVarBinom == behavPlot) %>%
-  select(-behaveVarBinom) %>%
-  gt() %>% 
-#  data_color(
-#    columns = pvalweightBetas,
-#    colors = scales::col_numeric(
-#      palette = c("white", "red"),
-#      domain = c(1, 0))
-#  ) %>%
-  tab_header(
-    title = "Binomial Test Results - Agonisms Received",
-    subtitle = glue::glue("Cell Clusters with Multiple Significant Genes")
-  ) %>% 
-  cols_label(
-    treatCondBinom = "Treatment",
-    cellClusterName = "Cell Type",
-    betaDownCount = "- Beta",
-    betaUpCount = "+ Beta",
-    pvalweightBetas = "P-value"
-  )
-
-gtBehav
-
-gtsave(gtBehav, paste0(figDir,"/7_table_sigBetas_allCells_groom.png"))
 
 
 for (behavPlot in c("groom", "aggRec")) {
@@ -876,3 +821,415 @@ for (behavPlot in c("groom", "aggRec")) {
 
 ```
 
+
+
+```{r beta hist with pvalues}
+
+  cellClust <- vector()
+  behaveVar <- vector()
+  treatCond <- vector()
+  geneName <- vector()
+  betaVal <- vector()
+  
+  
+  cellClustBinom <- vector()
+  behaveVarBinom <- vector()
+  trtBinom <- vector()
+  betaUpCount <- vector()
+  betaDownCount <- vector()
+  pvalNull <- vector()
+  pvalweightBetas <- vector()
+  
+  combPvalNull <- vector()
+  combPvalWeight <- vector()
+  combUpCount <- vector()
+  combDownCount <- vector()
+  cellClustBinomComb <- vector()
+  behaveVarBinomComb <- vector()
+  
+  for (cluster in clusterCellID$cluster) {
+    clusterDouble <- paste0(floor(cluster/10),cluster %% 10)
+    #agonism received results
+    assign(x = paste0("res_full_aggRec_DMpbRegGE_c",clusterDouble),
+           value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_agRec_emmreml")))
+    #groom
+    assign(x = paste0("res_full_groom_DMpbRegGE_c",clusterDouble),
+           value = read.table(paste0(workDir,"data/results_c",clusterDouble,"_groom_emmreml")))
+  }
+
+  for (variable in c("aggRec","groom")) {
+    #variable <- "aggRec"
+  
+    for (cluster in c("00","14","02","05","06","07")) {
+      #cluster <- "00"
+      
+      emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
+      
+      emrml$NCstdBeta <- emrml[,3] / sqrt(emrml[,9])
+      emrml$LPSstdBeta <- emrml[,4] / sqrt(emrml[,10])
+      
+      emrml$NCsig <- emrml[,20] < 0.10
+      emrml$LPSsig <- emrml[,21] < 0.10
+      
+      assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
+      assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+      
+      NCposRatio <- mean(emrml$NCstdBeta > 0)
+      LPSposRatio <- mean(emrml$LPSstdBeta > 0)
+  
+      for (treatment in c("NC","LPS")) {
+        #treatment <- "NC"
+        
+        if (treatment == "NC") {
+          colNum <- 22
+          betaPosRatio <- NCposRatio
+        } else {
+          colNum <- 23
+          betaPosRatio <- LPSposRatio
+        }
+        
+        posBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] > 0)
+        negBetas <- sum(get(paste0("plotEmrml",cluster,variable,treatment))[,colNum] < 0)
+        
+        if (sum(posBetas,negBetas) > 0) {
+          #binomial test of 50-50 pos/neg betas
+          posBinomNull <- binom.test(posBetas, sum(posBetas,negBetas), p = .5)
+          
+          #binomial test of pos/neg betas from exact distribution
+          posBinomBkg <- binom.test(posBetas, sum(posBetas,negBetas), p = betaPosRatio)
+          
+          binomPval <- posBinomBkg$p.value
+          
+          #write to giant data frame
+          #betas
+          cellClust <- c(cellClust, rep(cluster, sum(posBetas, negBetas)))
+          behaveVar <- c(behaveVar, rep(variable, sum(posBetas, negBetas)))
+          treatCond <- c(treatCond, rep(treatment, sum(posBetas, negBetas)))
+          geneName <- c(geneName, rownames(get(paste0("plotEmrml",cluster,variable,treatment))))
+          betaVal <- c(betaVal, get(paste0("plotEmrml",cluster,variable,treatment))[,colNum])
+          
+          #write biniomial test results to vectors
+          cellClustBinom <- c(cellClustBinom,cluster)
+          behaveVarBinom <- c(behaveVarBinom,variable)
+          trtBinom <- c(trtBinom,treatment)
+          betaUpCount <- c(betaUpCount,posBetas)
+          betaDownCount <- c(betaDownCount,negBetas)
+          pvalNull <- c(pvalNull,signif(posBinomNull$p.value, digits = 3))
+          pvalweightBetas <- c(pvalweightBetas,signif(posBinomBkg$p.value, digits = 3))
+          
+        } else {
+          rm(posBinomBkg)
+          rm(posBinomNull)
+          binomPval <- NA
+        }
+        
+        ggplot() +
+          geom_histogram(aes(x = get(paste0("plotEmrml",cluster,variable,treatment))[,colNum]), bins = 50) +
+          ggtitle(paste0(treatment,":",variable," - c",cluster," - ",
+                         dim(get(paste0("plotEmrml",cluster,variable,treatment)))[1]," sig genes")) +
+          annotate(geom = "text", x = Inf, y = -Inf, label = posBetas, size = 8, hjust = "inward", vjust = "inward") +
+          annotate(geom = "text", x = -Inf, y = -Inf, label = negBetas, size = 8, hjust = "inward", vjust = "inward") +
+          annotate(geom = "text", x = 5, y = 75, label = paste0("p=",signif(binomPval, digits = 2)), 
+                   size = 8, hjust = .25, vjust = .5) +
+          xlab(paste0(treatment,":",variable," - c",cluster," - std Betas")) +
+          xlim(c(-8,8)) + ylim(c(0,100)) + theme(plot.title = element_text(size=24))
+        
+        ggsave(paste0(figDir,"/sigBetas_hist_",variable,"x",treatment,"_c",cluster,".png"))
+      }
+        
+      ### combined NC and LPS
+      combPosRatio <- mean(c(emrml$NCstdBeta,emrml$LPSstdBeta) > 0)
+      
+      combPosBetas <- sum(get(paste0("plotEmrml",cluster,variable,"LPS"))[,23] > 0) + sum(get(paste0("plotEmrml",cluster,variable,"NC"))[,22] > 0)
+      combNegBetas <- sum(get(paste0("plotEmrml",cluster,variable,"LPS"))[,23] < 0) + sum(get(paste0("plotEmrml",cluster,variable,"NC"))[,22] < 0)
+      
+      if (sum(combPosBetas,combNegBetas) > 0) {
+        #binomial test of 50-50 pos/neg betas
+        posBinomNullcomb <- binom.test(combPosBetas, sum(combPosBetas,combNegBetas), p = .5)
+        
+        #binomial test of pos/neg betas from exact distribution
+        posBinomBkgcomb <- binom.test(combPosBetas, sum(combPosBetas,combNegBetas), p = combPosRatio)
+        
+        binomPvalcombNull <- signif(posBinomNullcomb$p.value, digits = 3)
+        binomPvalcomb <- signif(posBinomBkgcomb$p.value, digits = 3)
+        
+        cellClustBinomComb <- c(cellClustBinomComb,cluster)
+        behaveVarBinomComb <- c(behaveVarBinomComb,variable)
+        combPvalNull <- c(combPvalNull,binomPvalcombNull)
+        combPvalWeight <- c(combPvalWeight,binomPvalcomb)
+        combUpCount <- c(combUpCount,combPosBetas)
+        combDownCount <- c(combDownCount,combNegBetas)
+          
+      }
+    }
+  }
+  
+  betaHistDF <- as.data.frame(cellClust)
+  
+  betaHistDF$behaveVar <- behaveVar
+  betaHistDF$treatCond <- treatCond
+  betaHistDF$geneName <- geneName
+  betaHistDF$betaVal <- betaVal
+  
+  write.table(x = betaHistDF, file = paste0(plotDataDir,"betaHistDataFrame.txt"))
+  
+  betaBinomPvalDF <- as.data.frame(cellClustBinom)
+  
+  betaBinomPvalDF$behaveVarBinom <- behaveVarBinom
+  betaBinomPvalDF$trtBinom <- trtBinom
+  betaBinomPvalDF$betaUpCount <- betaUpCount
+  betaBinomPvalDF$betaDownCount <- betaDownCount
+  betaBinomPvalDF$pvalNull <- pvalNull
+  betaBinomPvalDF$pvalweightBetas <- pvalweightBetas
+  
+  write.table(x = betaBinomPvalDF, file = paste0(plotDataDir,"betaBinomTestDataFrame.txt"))
+  
+  betaBinomPvalCombDF <- as.data.frame(cellClustBinomComb)
+  
+  betaBinomPvalCombDF$behaveVarBinom <- behaveVarBinomComb
+  betaBinomPvalCombDF$betaUpCount <- combUpCount
+  betaBinomPvalCombDF$betaDownCount <- combDownCount
+  betaBinomPvalCombDF$pvalNull <- combPvalNull
+  betaBinomPvalCombDF$pvalweightBetas <- combPvalWeight
+  
+  write.table(x = betaBinomPvalCombDF, file = paste0(plotDataDir,"betaBinomCombinedTestDataFrame.txt"))
+
+
+
+```
+
+
+```{r density for poster}
+
+ggplot(betaHistAgRec, aes(x = betaVal, y = cellClusterName, group = cellClusterName, color = cellClusterName, fill = cellClusterName)) +
+  geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ylab("") + xlab("Significant Beta Values, Cell-to-Cell Variance")  + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 22),
+        axis.text.y = element_text(size = 16, vjust = -1),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size = 16)) +
+  ggtitle("Agonisms Received")
+
+ggsave(paste0(figDir,"/7_sigBetas_allCells_agRec_hist_poster.png"))
+
+
+ggplot(betaHistGroom, aes(x = betaVal, y = cellClusterName, group = cellClusterName, color = cellClusterName, fill = cellClusterName)) +
+  geom_density_ridges() + scale_fill_viridis(discrete=TRUE) + theme_minimal() + scale_color_viridis(discrete=TRUE) +
+  ylab("") + xlab("Significant Beta Values, Cell-to-Cell Variance") + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 22),
+        axis.text.y = element_text(size = 16, vjust = -1),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size = 16)) +
+  ggtitle("Overall Grooming")
+
+ggsave(paste0(figDir,"/7_sigBetas_allCells_groom_hist_poster.png"))
+
+```
+
+```{r DM v mean betas}
+
+cluster <- "00"
+
+variable <- "aggRec"
+    
+paulResults <- readRDS("~/Dropbox (Personal)/scRNA/SGE_DM/paulData/res_fdr_celltype_CD8_A_modelnum_1_covariate_gc.overall.agg.rec_nperms_100.RDS")
+
+paulResults$NCstdBetaMean <- paulResults[,7] / sqrt(paulResults[,15])
+paulResults$LPSstdBetaMean <- paulResults[,8] / sqrt(paulResults[,16])
+
+paulResults$NCsigMean <- paulResults[,28] < 0.10
+paulResults$LPSsigMean <- paulResults[,29] < 0.10
+
+emrml <- get(paste0("res_full_",variable,"_DMpbRegGE_c",cluster))
+
+meanDMgeneList <-  intersect(rownames(paulResults),rownames(emrml))
+
+paulResults <- paulResults[rownames(paulResults) %in% meanDMgeneList,]
+emrml <- emrml[rownames(emrml) %in% meanDMgeneList,]
+
+
+
+emrml$NCstdBetaDM <- emrml[,3] / sqrt(emrml[,9])
+emrml$LPSstdBetaDM <- emrml[,4] / sqrt(emrml[,10])
+
+emrml$NCsigDM <- emrml[,20] < 0.10
+emrml$LPSsigDM <- emrml[,21] < 0.10
+
+dmpbDataNC <- emrml[,c(22,24)]
+dmpbDataNC$gene <- rownames(emrml)
+
+expDataNC <- paulResults[,c(32,34)]
+expDataNC$gene <- rownames(paulResults)
+
+ncResults <- merge(expDataNC, dmpbDataNC, by = "gene")
+
+
+dmpbDataLPS <- emrml[,c(23,25)]
+dmpbDataLPS$gene <- rownames(emrml)
+
+expDataLPS <- paulResults[,c(33,35)]
+expDataLPS$gene <- rownames(paulResults)
+
+lpsResults <- merge(expDataLPS, dmpbDataLPS, by = "gene")
+
+
+#assign(x = paste0("plotEmrml",cluster,variable,"NC"), value = subset(emrml, NCsig == TRUE))
+#assign(x = paste0("plotEmrml",cluster,variable,"LPS"), value = subset(emrml, LPSsig == TRUE))
+
+#ifelse(NC4sig & LPS4sig, "#F8766D", ifelse(LPS4sig, "#619CFF", ifelse(NC4sig, "#00BA38", "#000000")))
+  
+ncResults$combSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "both",
+                            ifelse(ncResults$NCsigDM, "dm",
+                                   ifelse(ncResults$NCsigMean, "mean", "neither")))
+
+lpsResults$combSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "both",
+                            ifelse(lpsResults$LPSsigDM, "dm",
+                                   ifelse(lpsResults$LPSsigMean, "mean", "neither")))
+
+ncResults$combSig <- factor(ncResults$combSig, levels = c("neither","mean","dm","both"))
+lpsResults$combSig <- factor(lpsResults$combSig, levels = c("neither","mean","dm","both"))
+
+ncResults$colorSig <- ifelse(ncResults$NCsigDM & ncResults$NCsigMean, "#F8766D",
+                            ifelse(ncResults$NCsigDM, "#00BA38",
+                                   ifelse(ncResults$NCsigMean, "#619CFF", "#000000")))
+
+lpsResults$colorSig <- ifelse(lpsResults$LPSsigDM & lpsResults$LPSsigMean, "#35B779",
+                            ifelse(lpsResults$LPSsigDM, "#31688E",
+                                   ifelse(lpsResults$LPSsigMean, "#FDE725", "gray60")))
+
+
+
+ggplot(data = lpsResults, aes(x = LPSstdBetaMean, y = LPSstdBetaDM)) +
+  geom_point(col = lpsResults$colorSig, alpha = .66) +
+  geom_smooth(method = "lm", col = "black", alpha = .05) +
+  xlab("Mean Effect Standardized Betas") + 
+  ylab("DM Effect Standardized Betas") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  ggtitle(paste0("c",cluster," - ",treatment,":",variable), 
+          subtitle = paste0("mean:",sum(lpsResults$LPSsigMean),
+                            " DM:",sum(lpsResults$LPSsigDM),
+                            " Rsq=",round(cor(lpsResults$LPSstdBetaMean,lpsResults$LPSstdBetaDM)^2,digits = 4)))
+
+ggsave(paste0(figDir,"/8_stdBetas_DM_v_mean_CD8A_LPS.png"), width = 6, height = 4)
+
+#genes to check SH2D1A
+#
+#
+
+
+
+
+```
+
+```{r gene by gene data}
+
+
+subset(lpsResults, combSig == "dm" & abs(LPSstdBetaMean) < .5)
+subset(lpsResults, combSig == "mean" & abs(LPSstdBetaDM) < .5)
+
+#geneName <- "RHOG"
+
+for (geneName in c("RHOG","PVRL2","HDDC2","HIPK2","SPRYD3","APH1B")) {
+  
+  #geneName <- "RHOG"
+  
+  geneNum <- which(rownames(sge_LPS_pbMean_matrix) == geneName)
+  
+  DMeffectDF <- as.data.frame(unlist(sge_LPS_pbMean_matrix[geneNum,]))
+  
+  colnames(DMeffectDF) <- "mean"
+  
+  DMeffectDF$DM <- unlist(sge_LPS_DMpbResid_matrix[geneNum,])
+  DMeffectDF$agRec <- subset(metadata, trt == "LPS")$aggRec_cent
+  DMeffectDF$groom <- subset(metadata, trt == "LPS")$groom_cent
+  
+  meanColor <- scales::viridis_pal()(4)[1]
+  dmColor <- scales::viridis_pal()(4)[3]
+  cluster <- "00"
+  
+  meanAgrec <- ggplot(DMeffectDF, aes(x = agRec, y = mean)) +
+    geom_point(col = meanColor, size = 5) + xlab("Agonisms Received") + ylab("Mean") +
+    geom_smooth(method = "lm", se = FALSE, col = meanColor, lwd = 3) +
+    ggtitle(geneName) +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 22),
+          axis.title = element_text(size = 22))
+    
+  
+  meanAgrec
+  ggsave(paste0(figDir,"6_mean_v_agRec__by_individual_c",cluster,"_",geneName,".png"))
+  
+  DMAgrec <- ggplot(DMeffectDF, aes(x = agRec, y = DM)) +
+    geom_point(col = dmColor, size = 5) + xlab("Agonisms Received") + ylab("DM") +
+    geom_smooth(method = "lm", se = FALSE, col = dmColor, lwd = 3) +
+    ggtitle(geneName) +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 22),
+          axis.title = element_text(size = 22))
+  
+  DMAgrec
+  ggsave(paste0(figDir,"6_DM_v_agRec__by_individual_c",cluster,"_",geneName,".png"))
+  
+  plot_grid(meanAgrec, DMAgrec, ncol = 2)
+  ggsave(paste0(figDir,"6_mean_and_DM_v_agRec__by_individual_c",cluster,"_",geneName,".png"), width = 6, height = 4)
+}
+
+subset(lpsResults, gene %in% c("RHOG","PVRL2","HDDC2","HIPK2","SPRYD3","APH1B"))
+```
+
+```{r poster slide 10 variance mean relationships}
+
+
+ind <- 14
+
+varMean <- ggplot(data = rawDataDF, aes(x = mean, y = var)) +
+  geom_point(alpha=0.5, col = varColor, size = 3) +
+  stat_smooth(method='lm', color='gray40', alpha = .8, fullrange = T) +
+  xlab(paste0('Pseudobulk Mean GE')) +
+  ylab(paste0('Variance')) +
+  theme_minimal() +
+      theme(plot.title = element_text(size = 22),
+          axis.title = element_text(size = 22))
+
+
+varMean
+ggsave(paste0(figDir,"10_resid_var_v_pbMean_ge__by_individual_c02.png"))
+
+dmMean <- ggplot(data = rawDataDF, aes(x = mean, y = DM)) +
+  geom_point(alpha=0.5, col = dmColor, size = 3) +
+  stat_smooth(method='lm', color='gray40', alpha = .8, fullrange = T) +
+  xlab(paste0('Pseudobulk Mean GE')) +
+  ylab(paste0('DM')) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 22),
+          axis.title = element_text(size = 22))
+
+
+dmMean
+ggsave(paste0(figDir,"10_resid_DMpb_v_pbMean_ge__by_individual_c02.png"))
+
+
+plot_grid(varMean,dmMean, ncol = 2)
+ggsave(paste0(figDir,"10_resid_DMpb_and_var_v_pbMean_ge__by_individual_c02.png"))
+
+
+#cutoff at GE of 4
+
+varMean <- varMean + xlim(c(0,3.5)) + ylim(c(0,40))
+
+varMean
+ggsave(paste0(figDir,"10_resid_var_v_pbMean_ge__by_individual_c02_xlim4.png"))
+
+dmMean <- dmMean
+
+dmMean
+ggsave(paste0(figDir,"10_resid_DMpb_v_pbMean_ge__by_individual_c02_xlim4.png"))
+
+
+plot_grid(varMean,dmMean, ncol = 2)
+ggsave(paste0(figDir,"10_resid_DMpb_and_var_v_pbMean_ge__by_individual_c02_xlim4.png"))
+
+```
